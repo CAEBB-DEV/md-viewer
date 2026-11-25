@@ -24,5 +24,9 @@
     <Application.Styles>
         <Fluent2Theme />
         <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
+        <!-- Cursor de enlace (mano) en todos los botones (también los de alternar, como Editar) y en las filas del explorador -->
+        <Style Selector=":is(Button), TreeViewItem">
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
     </Application.Styles>
 </Application>

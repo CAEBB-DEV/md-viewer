@@ -39,6 +39,11 @@
 
 ### Visor
 - Vista con el **formato de GitHub** (títulos, tablas, citas, código con resaltado de sintaxis), en tema claro y oscuro.
+- **HTML como en GitHub**: los documentos que incluyen HTML (`<p align="center">`, `<img width>`, `<details>`,
+  `<kbd>`, `<sub>`, comentarios…) se muestran con un visor web con el mismo dialecto y estilo que GitHub (también
+  listas de tareas, notas al pie y alertas `> [!NOTE]`); los demás usan el visor nativo, que es más rápido. La
+  elección es automática y ocurre en el mismo panel. Los scripts dentro del documento se bloquean.
+- Imágenes con ruta relativa (`![](docs/captura.png)`) resueltas desde la carpeta del documento.
 - **Ancho de lectura** ajustable desde la barra inferior (480 – 2400 px), con el texto siempre centrado.
 - **Selección de texto** como en un editor: arrastrar, doble clic (palabra) y triple clic (párrafo); `Ctrl+C` copia
   también el código en línea y los enlaces.
@@ -192,7 +197,8 @@ md-viewer/
 │   ├── SingleInstance.cs       # Una sola ventana por usuario
 │   ├── ViewModels/             # MainViewModel (archivo abierto, explorador) y FsNode (árbol)
 │   ├── Views/                  # Ventana principal y "Acerca de"
-│   ├── Styles/                 # GithubMarkdown.axaml: estilo GitHub del visor
+│   ├── MarkdownHtml.cs         # Visor web: detecta HTML y lo convierte con Markdig
+│   ├── Styles/                 # GithubMarkdown.axaml: estilo GitHub del visor nativo
 │   └── Assets/                 # Icono de la app y logo del autor
 ├── packaging/                  # Instaladores: windows/ (Inno Setup), macos/ (.dmg), linux/ (.deb)
 ├── tools/                      # Subida de versión y publicación
@@ -204,7 +210,9 @@ md-viewer/
 ## Tecnologías
 
 - [.NET 10](https://dotnet.microsoft.com/) y [Avalonia UI 12](https://avaloniaui.net/) (tema Fluent 2)
-- [Markdown.Avalonia](https://github.com/whistyun/Markdown.Avalonia) — renderizado del Markdown
+- [Markdown.Avalonia](https://github.com/whistyun/Markdown.Avalonia) — visor nativo del Markdown
+- [Markdig](https://github.com/xoofx/markdig) + [Avalonia WebView](https://docs.avaloniaui.net/) — visor web para
+  documentos con HTML (usa el navegador del sistema: WebView2, WebKit o WebKitGTK)
 - [AvaloniaEdit](https://github.com/AvaloniaUI/AvaloniaEdit) + [TextMateSharp](https://github.com/danipen/TextMateSharp) — editor con resaltado de sintaxis
 - [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) — patrón MVVM
 - [Inno Setup](https://jrsoftware.org/isinfo.php) — instalador de Windows

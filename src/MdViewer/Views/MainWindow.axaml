@@ -37,35 +37,54 @@
         </Style>
 
         <!-- Encabezado de sección del explorador (título + botones compactos) -->
+        <!-- Barra superior: botones cuadrados con icono de trazo (atenuado cuando el botón está deshabilitado) -->
+        <Style Selector="StackPanel.toolbar > :is(Button)">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="StackPanel.toolbar Path">
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="StrokeThickness" Value="1.5" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Stroke" Value="{Binding $parent[Button].Foreground}" />
+        </Style>
+        <Style Selector="StackPanel.toolbar > :is(Button):disabled Path">
+            <Setter Property="Opacity" Value="0.35" />
+        </Style>
+        <Style Selector="StackPanel.toolbar > ToggleButton:checked Path">
+            <Setter Property="Stroke" Value="{DynamicResource ToggleButtonForegroundChecked}" />
+        </Style>
+
+        <!-- Clic en cualquier parte del encabezado (fuera de los botones) minimiza/expande el panel -->
         <Style Selector="Grid.sectionHeader">
             <Setter Property="Margin" Value="10,6,6,4" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
         </Style>
         <Style Selector="Grid.sectionHeader Button">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Padding" Value="8,3" />
             <Setter Property="Margin" Value="4,0,0,0" />
         </Style>
-        <!-- Botón ▾ para plegar/desplegar cada panel del explorador -->
-        <Style Selector="Grid.sectionHeader Button.collapse">
-            <Setter Property="Width" Value="22" />
-            <Setter Property="Height" Value="22" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="Margin" Value="-4,0,6,0" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="HorizontalContentAlignment" Value="Center" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-        </Style>
+        <!-- Flecha ▾ del encabezado (solo el icono; el clic lo atiende todo el encabezado) -->
         <Style Selector="Path.chevron">
             <Setter Property="Data" Value="M2,4 L6,8 L10,4" />
             <Setter Property="Width" Value="12" />
             <Setter Property="Height" Value="12" />
+            <Setter Property="Margin" Value="1,0,10,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="StrokeThickness" Value="1.6" />
             <Setter Property="StrokeLineCap" Value="Round" />
             <Setter Property="StrokeJoin" Value="Round" />
-            <Setter Property="Stroke" Value="{Binding $parent[Button].Foreground}" />
+            <Setter Property="Stroke" Value="{Binding $parent[Window].Foreground}" />
         </Style>
-        <!-- Plegado: la flecha apunta a la derecha -->
-        <Style Selector="Button.collapse.collapsed Path.chevron">
+        <!-- Minimizado: la flecha apunta a la derecha -->
+        <Style Selector="Path.chevron.collapsed">
             <Setter Property="RenderTransform" Value="rotate(-90deg)" />
         </Style>
         <!-- Separador entre paneles: muestra el cursor de cambiar alto -->
@@ -128,17 +147,30 @@
                 <Button Content="☰" Click="TogglePane" ToolTip.Tip="Mostrar/ocultar explorador" />
                 <TextBlock Grid.Column="1" Margin="12,0" VerticalAlignment="Center"
                            Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
-                    <ToggleButton Content="Editar" IsChecked="{Binding IsEditing}"
-                                  IsEnabled="{Binding FileName, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                    <Button Content="Guardar" Command="{Binding SaveCommand}" ToolTip.Tip="Ctrl+S" />
-                    <Button Content="◐" Click="ToggleTheme" ToolTip.Tip="Tema claro/oscuro" />
-                    <Button Click="ShowAbout" ToolTip.Tip="Acerca de" AutomationProperties.Name="Acerca de"
-                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
-                        <!-- Icono de información: círculo con una "i" -->
-                        <Path Width="16" Height="16" StrokeThickness="1.5" StrokeLineCap="Round"
-                              Stroke="{Binding $parent[Button].Foreground}"
-                              Data="M8,1.25 A6.75,6.75 0 1 1 7.99,1.25 Z M8,7.2 V11.6 M8,4.6 V4.7" />
+                <!-- Solo iconos: editar, guardar, cerrar documento, tema y acerca de -->
+                <StackPanel Grid.Column="2" Classes="toolbar" Orientation="Horizontal" Spacing="6">
+                    <ToggleButton IsChecked="{Binding IsEditing}" ToolTip.Tip="Editar" AutomationProperties.Name="Editar"
+                                  IsEnabled="{Binding FileName, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <Path Data="M10.5,2.5 L13.5,5.5 L5.5,13.5 L2.5,13.5 L2.5,10.5 Z M8.5,4.5 L11.5,7.5" />
+                    </ToggleButton>
+                    <Button Command="{Binding SaveCommand}" ToolTip.Tip="Guardar (Ctrl+S)" AutomationProperties.Name="Guardar">
+                        <Path Data="M2.5,2.5 H11 L13.5,5 V13.5 H2.5 Z M5,2.5 V6 H10 V2.5 M5,13.5 V9.5 H11 V13.5" />
+                    </Button>
+                    <Button Command="{Binding CloseViewCommand}" ToolTip.Tip="Cerrar documento"
+                            AutomationProperties.Name="Cerrar documento"
+                            IsEnabled="{Binding FileName, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <Path Data="M4,4 L12,12 M12,4 L4,12" />
+                    </Button>
+                    <Button Click="ToggleTheme" ToolTip.Tip="Tema claro/oscuro" AutomationProperties.Name="Tema claro/oscuro">
+                        <!-- Círculo con la mitad derecha rellena -->
+                        <Panel>
+                            <Path Data="M8,1.5 A6.5,6.5 0 1 1 7.99,1.5 Z" />
+                            <Path Data="M8,1.5 A6.5,6.5 0 0 1 8,14.5 Z" Fill="{Binding $parent[Button].Foreground}" />
+                        </Panel>
+                    </Button>
+                    <Button Click="ShowAbout" ToolTip.Tip="Acerca de" AutomationProperties.Name="Acerca de">
+                        <!-- Círculo con una "i" -->
+                        <Path Data="M8,1.25 A6.75,6.75 0 1 1 7.99,1.25 Z M8,7.2 V11.6 M8,4.6 V4.7" />
                     </Button>
                 </StackPanel>
             </Grid>
@@ -158,11 +190,8 @@
                 <Grid Name="ExplorerGrid" RowDefinitions="*,6,*" Margin="6,6,0,6">
                     <Border Classes="panel">
                         <DockPanel>
-                            <Grid Classes="sectionHeader" DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto">
-                                <Button Classes="collapse" Click="ToggleFilesPanel" AutomationProperties.Name="Plegar o desplegar Archivos"
-                                        ToolTip.Tip="Minimizar / expandir">
-                                    <Path Classes="chevron" />
-                                </Button>
+                            <Grid Classes="sectionHeader" DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Tapped="FilesHeaderTapped">
+                                <Path Name="FilesToggle" Classes="chevron" />
                                 <TextBlock Grid.Column="1" Text="Archivos" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 <Button Grid.Column="2" Content="+" Click="AddFile" AutomationProperties.Name="Agregar archivo"
                                         ToolTip.Tip="Agregar archivos .md" />
@@ -186,11 +215,8 @@
 
                     <Border Grid.Row="2" Classes="panel">
                         <DockPanel>
-                            <Grid Classes="sectionHeader" DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto">
-                                <Button Classes="collapse" Click="ToggleFoldersPanel" AutomationProperties.Name="Plegar o desplegar Carpetas"
-                                        ToolTip.Tip="Minimizar / expandir">
-                                    <Path Classes="chevron" />
-                                </Button>
+                            <Grid Classes="sectionHeader" DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Tapped="FoldersHeaderTapped">
+                                <Path Name="FoldersToggle" Classes="chevron" />
                                 <TextBlock Grid.Column="1" Text="Carpetas" FontWeight="SemiBold" VerticalAlignment="Center" />
                                 <Button Grid.Column="2" Content="+" Click="AddFolder" AutomationProperties.Name="Agregar carpeta"
                                         ToolTip.Tip="Agregar carpetas" />
@@ -249,13 +275,16 @@
                     <x:Double x:Key="ScrollBarThumbThickness">10</x:Double>
                 </Panel.Resources>
 
-                <TextBlock Text="Selecciona un archivo .md en el explorador"
-                           HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.6"
-                           IsVisible="{Binding FileName, Converter={x:Static ObjectConverters.IsNull}}" />
+                <!-- Sin documento abierto: logo y nombre de la app al centro -->
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16"
+                            IsVisible="{Binding FileName, Converter={x:Static ObjectConverters.IsNull}}">
+                    <Image Source="/Assets/app.ico" Width="160" Height="160" RenderOptions.BitmapInterpolationMode="HighQuality" />
+                    <TextBlock Text="MD Viewer" FontSize="32" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                </StackPanel>
 
-                <md:MarkdownScrollViewer Name="Viewer" Markdown="{Binding Markdown}" SelectionEnabled="True"
+                <md:MarkdownScrollViewer Name="Viewer" Markdown="{Binding NativeMarkdown}" AssetPathRoot="{Binding DocumentFolder}" SelectionEnabled="True"
                                          SelectionBrush="{DynamicResource ViewerSelectionBrush}"
-                                         IsVisible="{Binding !IsEditing}">
+                                         IsVisible="{Binding ShowNativeViewer}">
                     <!-- Estilo tipo GitHub (claro/oscuro) en lugar del estilo propio de la librería.
                          AppendixOfFluentTheme aporta el resaltado de sintaxis de los bloques de código. -->
                     <md:MarkdownScrollViewer.MarkdownStyle>
@@ -265,6 +294,9 @@
                         </Styles>
                     </md:MarkdownScrollViewer.MarkdownStyle>
                 </md:MarkdownScrollViewer>
+
+                <!-- Visor web: documentos con HTML (como en GitHub). Su visibilidad la controla UpdateWebViewer -->
+                <NativeWebView Name="WebViewer" IsVisible="False" Background="{Binding $parent[Window].Background}" />
 
                 <ae:TextEditor Name="Editor" Document="{Binding Document}" Padding="8,8,0,0"
                                ShowLineNumbers="True" WordWrap="True" FontSize="14"

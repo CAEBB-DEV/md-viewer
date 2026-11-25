@@ -40,10 +40,29 @@ public partial class MainViewModel : ObservableObject
 
     /// <summary>Texto que se muestra en la vista; se actualiza al salir del modo edición.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NativeMarkdown))]
     public partial string Markdown { get; set; } = "";
 
+    /// <summary>El documento tiene HTML: se muestra con el visor web (si no, con el nativo, que es más rápido).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsViewing))]
+    [NotifyPropertyChangedFor(nameof(ShowNativeViewer), nameof(ShowWebViewer), nameof(NativeMarkdown))]
+    public partial bool UsesHtml { get; set; }
+
+    /// <summary>No hay navegador del sistema disponible: todo se muestra con el visor nativo.</summary>
+    [ObservableProperty]
+    public partial bool WebViewerUnavailable { get; set; }
+
+    partial void OnMarkdownChanged(string value) => UsesHtml = !WebViewerUnavailable && MarkdownHtml.ContainsHtml(value);
+    partial void OnWebViewerUnavailableChanged(bool value) => UsesHtml = false;
+
+    /// <summary>Contenido del visor nativo: vacío si el documento va al visor web, para no procesarlo dos veces.</summary>
+    public string NativeMarkdown => UsesHtml ? "" : Markdown;
+
+    public bool ShowNativeViewer => FileName is not null && !IsEditing && !UsesHtml;
+    public bool ShowWebViewer => FileName is not null && !IsEditing && UsesHtml;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsViewing), nameof(ShowNativeViewer), nameof(ShowWebViewer))]
     public partial bool IsEditing { get; set; }
 
     /// <summary>Hay un archivo abierto en modo visualización (muestra la barra de ancho de lectura).</summary>
@@ -57,7 +76,11 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Title))]
     [NotifyPropertyChangedFor(nameof(IsViewing))]
+    [NotifyPropertyChangedFor(nameof(DocumentFolder), nameof(ShowNativeViewer), nameof(ShowWebViewer))]
     public partial string? FileName { get; set; }
+
+    /// <summary>Carpeta del archivo abierto: base para las imágenes con ruta relativa (logo.png, docs/captura.png).</summary>
+    public string? DocumentFolder => _path is null ? null : Path.GetDirectoryName(_path);
 
     [ObservableProperty]
     public partial string? Error { get; set; }
@@ -142,8 +165,20 @@ public partial class MainViewModel : ObservableObject
         return path.Equals(root, PathComparison) || path.StartsWith(root + Path.DirectorySeparatorChar, PathComparison);
     }
 
+    /// <summary>
+    /// Botón ✕ de la barra superior: deja de mostrar el documento (sigue en el explorador). Si hay cambios sin
+    /// guardar pregunta antes, igual que al cambiar de archivo.
+    /// </summary>
+    [RelayCommand]
+    async Task CloseView()
+    {
+        if (await CanLeaveAsync()) CloseDocument();
+    }
+
+    // Se quita la selección para que un clic en el archivo lo vuelva a abrir
     void CloseDocument()
     {
+        WithoutOpening(() => { SelectedFile = null; SelectedFolderItem = null; });
         _path = null;
         FileName = null;
         IsEditing = false;
@@ -171,24 +206,29 @@ public partial class MainViewModel : ObservableObject
 
     bool _revertingSelection;
 
+    // Solo un panel tiene selección: al elegir algo en uno se quita la del otro. Si no, volver a hacer clic
+    // en un archivo que sigue seleccionado en el otro panel no lo abriría (la selección no cambia).
     partial void OnSelectedFileChanged(FsNode? oldValue, FsNode? newValue)
     {
-        if (!_revertingSelection && newValue is { IsFolder: false })
-            _ = OpenFromTreeAsync(newValue, () => SelectedFile = oldValue);
+        if (!_revertingSelection && newValue is not null)
+            _ = OpenFromTreeAsync(newValue, () => SelectedFile = oldValue, () => SelectedFolderItem = null);
     }
 
     partial void OnSelectedFolderItemChanged(FsNode? oldValue, FsNode? newValue)
     {
-        if (!_revertingSelection && newValue is { IsFolder: false })
-            _ = OpenFromTreeAsync(newValue, () => SelectedFolderItem = oldValue);
+        if (_revertingSelection || newValue is null) return;
+        if (newValue.IsFolder) WithoutOpening(() => SelectedFile = null);
+        else _ = OpenFromTreeAsync(newValue, () => SelectedFolderItem = oldValue, () => SelectedFile = null);
     }
 
-    // Si el usuario cancela, la selección del árbol vuelve a donde estaba
-    async Task OpenFromTreeAsync(FsNode node, Action revertSelection)
+    // Si el usuario cancela, la selección del árbol vuelve a donde estaba; si se abrió, se limpia el otro panel
+    async Task OpenFromTreeAsync(FsNode node, Action revertSelection, Action clearOtherPanel) =>
+        WithoutOpening(await OpenAsync(node.FullPath) ? clearOtherPanel : revertSelection);
+
+    void WithoutOpening(Action changeSelection)
     {
-        if (await OpenAsync(node.FullPath)) return;
         _revertingSelection = true;
-        revertSelection();
+        changeSelection();
         _revertingSelection = false;
     }
 

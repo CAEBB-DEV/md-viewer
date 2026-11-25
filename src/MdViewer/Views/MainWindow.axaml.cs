@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using IOPath = System.IO.Path;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -10,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -40,8 +43,8 @@ public partial class MainWindow : Window
     // (los estilos no pueden cambiarlo); al cargarse se reemplaza su contenido por el icono.
     static MainWindow() => LoadedEvent.AddClassHandler<Button>((button, _) =>
     {
-        if (!button.Classes.Contains("CopyButton") || button.Content is Path) return;
-        var icon = new Path { Data = CopyIcon, Width = 16, Height = 16, StrokeThickness = 1.4, StrokeLineCap = PenLineCap.Round };
+        if (!button.Classes.Contains("CopyButton") || button.Content is Avalonia.Controls.Shapes.Path) return;
+        var icon = new Avalonia.Controls.Shapes.Path { Data = CopyIcon, Width = 16, Height = 16, StrokeThickness = 1.4, StrokeLineCap = PenLineCap.Round };
         icon.Bind(Shape.StrokeProperty, button.GetObservable(ForegroundProperty));
         button.Content = icon;
         ToolTip.SetTip(button, "Copiar");
@@ -68,9 +71,87 @@ public partial class MainWindow : Window
         {
             if (e.Property.Name == "Markdown") Dispatcher.UIThread.Post(ApplyViewerWidth, DispatcherPriority.Loaded);
         };
+        SetupWebViewer();
     }
 
     MainViewModel Vm => (MainViewModel)DataContext!;
+
+    // ---------- Visor web: documentos con HTML (los demás usan el visor nativo, más rápido) ----------
+
+    string? _webRendered;          // Markdown que tiene cargado el visor web
+    bool _webExpectNavigation;     // la próxima navegación es la página generada (no un clic en un enlace)
+
+    bool IsDark => ActualThemeVariant == ThemeVariant.Dark;
+
+    void SetupWebViewer()
+    {
+        // Datos del navegador en la carpeta del usuario (Program Files no permite escribir)
+        WebViewer.EnvironmentRequested += (_, e) =>
+        {
+            e.EnableDevTools = false;
+            if (e is WindowsWebView2EnvironmentRequestedEventArgs windows)
+                windows.UserDataFolder = IOPath.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MdViewer", "WebView2");
+        };
+        WebViewer.NavigationStarted += (_, e) =>
+        {
+            if (_webExpectNavigation) { _webExpectNavigation = false; return; }
+            e.Cancel = true;
+            if (e.Request is { } uri) OpenLink(uri);
+        };
+        WebViewer.NewWindowRequested += (_, e) =>
+        {
+            e.Handled = true;
+            if (e.Request is { } uri) OpenLink(uri);
+        };
+        Split.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == SplitView.IsPaneOpenProperty || e.Property == SplitView.DisplayModeProperty) UpdateWebViewer();
+        };
+        ActualThemeVariantChanged += (_, _) =>
+        {
+            if (WebViewer.IsVisible) _ = WebViewer.InvokeScript($"setTheme({(IsDark ? "true" : "false")})");
+            else _webRendered = null; // se vuelve a generar con el tema nuevo la próxima vez que se muestre
+        };
+    }
+
+    // Muestra el visor web cuando el documento tiene HTML y lo carga si cambió. Es una ventana nativa del sistema
+    // (se dibuja encima de todo), así que se oculta mientras el explorador se superpone en ventanas angostas.
+    void UpdateWebViewer()
+    {
+        if (DataContext is not MainViewModel vm) return;
+        var show = vm.ShowWebViewer && !(Split.DisplayMode == SplitViewDisplayMode.Overlay && Split.IsPaneOpen);
+        if (show && !ReferenceEquals(_webRendered, vm.Markdown))
+        {
+            try
+            {
+                _webRendered = vm.Markdown;
+                _webExpectNavigation = true;
+                WebViewer.Navigate(MarkdownHtml.WritePage(vm.Markdown, vm.DocumentFolder, IsDark, Math.Round(WidthSlider.Value / 2) * 2));
+            }
+            catch (Exception)
+            {
+                // Sin navegador del sistema (p. ej. Linux sin WebKitGTK): los documentos con HTML van al visor nativo
+                vm.WebViewerUnavailable = true;
+                show = false;
+            }
+        }
+        WebViewer.IsVisible = show;
+    }
+
+    // Enlaces del visor web: anclas en la misma página, otros .md en la app, el resto en la app del sistema
+    async void OpenLink(Uri uri)
+    {
+        if (uri.Fragment.Length > 1 && (!uri.IsFile || Directory.Exists(uri.LocalPath)))
+        {
+            var id = System.Text.Json.JsonSerializer.Serialize(Uri.UnescapeDataString(uri.Fragment[1..]));
+            await WebViewer.InvokeScript($"document.getElementById({id})?.scrollIntoView()");
+        }
+        else if (uri.IsFile && IOPath.GetExtension(uri.LocalPath).Equals(".md", StringComparison.OrdinalIgnoreCase))
+            Vm.OpenExternal(uri.LocalPath);
+        else
+            await Launcher.LaunchUriAsync(uri);
+    }
 
     WindowState _restoreState = WindowState.Maximized;
 
@@ -126,21 +207,31 @@ public partial class MainWindow : Window
     const double PanelMinHeight = 90;
     GridLength _filesHeight = new(1, GridUnitType.Star), _foldersHeight = new(1, GridUnitType.Star);
 
-    void ToggleFilesPanel(object? sender, RoutedEventArgs e) => TogglePanel(FilesBody, sender);
-    void ToggleFoldersPanel(object? sender, RoutedEventArgs e) => TogglePanel(FoldersBody, sender);
+    // Clic en cualquier parte del encabezado (flecha, título o espacio vacío), salvo en el botón +
+    void FilesHeaderTapped(object? sender, TappedEventArgs e)
+    {
+        if (!IsOnButton(e)) TogglePanel(FilesBody, FoldersBody);
+    }
 
-    void TogglePanel(Control body, object? button)
+    void FoldersHeaderTapped(object? sender, TappedEventArgs e)
+    {
+        if (!IsOnButton(e)) TogglePanel(FoldersBody, FilesBody);
+    }
+
+    static bool IsOnButton(RoutedEventArgs e) => (e.Source as Visual)?.FindAncestorOfType<Button>(includeSelf: true) is not null;
+
+    // Siempre queda un panel abierto: minimizar uno con el otro ya minimizado abre el otro
+    void TogglePanel(Control body, Control other)
     {
         // Recuerda el alto actual de los paneles abiertos (incluido lo ajustado con el separador)
         if (FilesBody.IsVisible) _filesHeight = ExplorerGrid.RowDefinitions[0].Height;
         if (FoldersBody.IsVisible) _foldersHeight = ExplorerGrid.RowDefinitions[2].Height;
         body.IsVisible = !body.IsVisible;
-        (button as Button)?.Classes.Set("collapsed", !body.IsVisible);
+        if (!body.IsVisible) other.IsVisible = true;
         ApplyExplorerLayout();
     }
 
-    // Panel abierto: ocupa su alto (proporcional). Plegado: solo su encabezado.
-    // Si un panel está plegado no hay separador; si ambos lo están, Carpetas queda abajo.
+    // Panel abierto: ocupa su alto (proporcional). Minimizado: solo su encabezado, sin separador.
     void ApplyExplorerLayout()
     {
         var rows = ExplorerGrid.RowDefinitions;
@@ -149,8 +240,9 @@ public partial class MainWindow : Window
         rows[0].MinHeight = filesOpen ? PanelMinHeight : 0;
         rows[2].Height = foldersOpen ? _foldersHeight : GridLength.Auto;
         rows[2].MinHeight = foldersOpen ? PanelMinHeight : 0;
-        rows[1].Height = filesOpen || foldersOpen ? new GridLength(6) : new GridLength(1, GridUnitType.Star);
         ExplorerSplitter.IsVisible = filesOpen && foldersOpen;
+        FilesToggle.Classes.Set("collapsed", !filesOpen);
+        FoldersToggle.Classes.Set("collapsed", !foldersOpen);
     }
 
     // Clic en cualquier parte de la fila de una carpeta: la despliega o la pliega (no hace falta atinar a la flecha)
@@ -177,7 +269,12 @@ public partial class MainWindow : Window
     }
 
     // Barra inferior: ancho máximo del texto en el visor (lo usa Styles/GithubMarkdown.axaml)
-    void ViewerWidthChanged(object? sender, RangeBaseValueChangedEventArgs e) => ApplyViewerWidth();
+    void ViewerWidthChanged(object? sender, RangeBaseValueChangedEventArgs e)
+    {
+        ApplyViewerWidth();
+        if (WebViewer?.IsVisible == true) _ = WebViewer.InvokeScript($"setWidth({Math.Round(e.NewValue / 2) * 2})");
+        else _webRendered = null; // se vuelve a generar con el ancho nuevo la próxima vez que se muestre
+    }
 
     bool _multiClick;
 
@@ -256,7 +353,12 @@ public partial class MainWindow : Window
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
-        if (DataContext is MainViewModel vm) vm.ConfirmUnsaved = AskUnsavedAsync;
+        if (DataContext is not MainViewModel vm) return;
+        vm.ConfirmUnsaved = AskUnsavedAsync;
+        vm.PropertyChanged += (_, p) =>
+        {
+            if (p.PropertyName is nameof(MainViewModel.ShowWebViewer) or nameof(MainViewModel.Markdown)) UpdateWebViewer();
+        };
     }
 
     // Al cerrar con cambios pendientes, pregunta; nunca guarda por su cuenta

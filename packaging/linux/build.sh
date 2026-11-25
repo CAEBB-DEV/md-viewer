@@ -31,6 +31,7 @@ install -m 644 packaging/linux/mdviewer-markdown.png "$STAGE/usr/share/icons/hic
 install -m 644 packaging/linux/mdviewer-markdown.svg "$STAGE/usr/share/icons/hicolor/scalable/mimetypes/"
 install -m 644 packaging/linux/mdviewer-markdown.xml "$STAGE/usr/share/mime/packages/mdviewer.xml"
 
+# libwebkit2gtk-4.1-0: navegador del sistema para el visor web (documentos con HTML).
 # ponytail: no declara ICU (libicuNN cambia de nombre en cada versión de Ubuntu); viene en cualquier escritorio.
 cat > "$STAGE/DEBIAN/control" <<EOF
 Package: mdviewer
@@ -39,7 +40,7 @@ Section: editors
 Priority: optional
 Architecture: amd64
 Maintainer: MD Viewer <noreply@localhost>
-Depends: libc6, libstdc++6, libfontconfig1, libx11-6, libice6, libsm6
+Depends: libc6, libstdc++6, libfontconfig1, libx11-6, libice6, libsm6, libwebkit2gtk-4.1-0
 Description: Visor y editor de archivos Markdown
  Visor y editor de archivos Markdown con vista estilo GitHub, tema claro y oscuro.
 EOF
