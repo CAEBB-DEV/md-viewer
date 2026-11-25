@@ -119,8 +119,24 @@ En VS Code: **F5** compila y depura; la tarea **watch** recompila al guardar.
 
 ## Generar instaladores
 
-En VS Code: **Terminal → Ejecutar tarea…** y elige una. Cada tarea **sube la versión**, publica la app para su
-plataforma y la empaqueta; el resultado queda en `dist/`.
+### Publicar una versión (los 3 instaladores)
+
+En VS Code: **Terminal → Ejecutar tarea… → Publicar versión (3 instaladores)**. La tarea
+([`tools/publicar-version.ps1`](tools/publicar-version.ps1) / [`.sh`](tools/publicar-version.sh)):
+
+1. sube la versión (1.1 → 1.2), hace commit y crea la etiqueta `v1.2`;
+2. la sube a GitHub, donde [GitHub Actions](.github/workflows/release.yml) genera en paralelo los instaladores de
+   **Windows, macOS y Linux con la misma versión** (cada uno en su propio sistema);
+3. los publica como **Release** descargable en
+   [Releases](https://github.com/CAEBB-DEV/md-viewer/releases). Tarda unos minutos; el avance se ve en
+   [Actions](https://github.com/CAEBB-DEV/md-viewer/actions).
+
+Requiere no tener cambios sin commit.
+
+### Un instalador en tu equipo
+
+Cada tarea **Instalador: …** sube la versión, publica la app para su plataforma y la empaqueta en tu equipo; el
+resultado queda en `dist/`.
 
 | Tarea | Resultado | Dónde ejecutarla | Requisito |
 |---|---|---|---|
@@ -162,7 +178,8 @@ md-viewer/
 │   ├── Styles/                 # GithubMarkdown.axaml: estilo GitHub del visor
 │   └── Assets/                 # Icono de la app y logo del autor
 ├── packaging/                  # Instaladores: windows/ (Inno Setup), macos/ (.dmg), linux/ (.deb)
-├── tools/                      # Subida automática de versión
+├── tools/                      # Subida de versión y publicación
+├── .github/workflows/          # release.yml: genera y publica los 3 instaladores
 ├── docs/                       # Capturas de este README
 └── .vscode/                    # Depuración, extensiones y tareas (build, watch, instaladores)
 ```

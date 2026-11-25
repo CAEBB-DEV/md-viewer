@@ -18,8 +18,19 @@
       "isBackground": true
     },
 
-    // ---------- Instaladores (resultado en dist/) ----------
+    // ---------- Publicar: una versión, los 3 instaladores, Release en GitHub ----------
     {
+      "label": "Publicar versión (3 instaladores)",
+      "detail": "Sube la versión, etiqueta vX.Y y la sube: GitHub Actions genera Windows, macOS y Linux y crea la Release",
+      "type": "process",
+      "command": "bash",
+      "args": ["tools/publicar-version.sh"],
+      "windows": { "command": "powershell", "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/publicar-version.ps1"] },
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+
+    // ---------- Instaladores (resultado en dist/) ----------    {
       "label": "Instalador: Windows",
       "detail": "dist/MdViewer-Setup-<versión>.exe (en Windows; requiere Inno Setup 6)",
       "dependsOn": ["versión: subir", "publicar: win-x64"],

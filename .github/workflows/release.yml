@@ -1,0 +1,93 @@
+# Genera los instaladores de Windows, macOS y Linux con la misma versión y los publica como Release.
+# Se dispara al subir una etiqueta vX.Y (la crea la tarea de VS Code "Publicar versión (3 instaladores)").
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  windows:
+    name: Instalador Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publicar win-x64
+        run: dotnet publish src/MdViewer/MdViewer.csproj -c Release -r win-x64 --self-contained -p:DebugType=none -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o dist/publish/win-x64
+      - name: Instalar Inno Setup
+        run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - name: Empaquetar
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File packaging/windows/build.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.exe
+          if-no-files-found: error
+
+  macos:
+    name: Instalador macOS
+    runs-on: macos-latest   # Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publicar osx-arm64
+        run: dotnet publish src/MdViewer/MdViewer.csproj -c Release -r osx-arm64 --self-contained -p:DebugType=none -o dist/publish/osx-arm64
+      - name: Empaquetar
+        run: bash packaging/macos/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*.dmg
+          if-no-files-found: error
+
+  linux:
+    name: Instalador Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publicar linux-x64
+        run: dotnet publish src/MdViewer/MdViewer.csproj -c Release -r linux-x64 --self-contained -p:DebugType=none -o dist/publish/linux-x64
+      - name: Empaquetar
+        run: bash packaging/linux/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*.deb
+          if-no-files-found: error
+
+  release:
+    name: Publicar Release
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Comprobar que la etiqueta coincide con la versión del proyecto
+        run: |
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' src/MdViewer/MdViewer.csproj)
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "La etiqueta $GITHUB_REF_NAME no coincide con <Version>$version</Version>"; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Crear la Release con los instaladores
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "MD Viewer ${GITHUB_REF_NAME#v}" \
+            --generate-notes
