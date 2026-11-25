@@ -88,6 +88,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Notas: instrucciones de instalación (.github/release-notes.md) + lista automática de cambios
+          generated=$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$GITHUB_REF_NAME" -q .body)
+          { sed "s/<versión>/${GITHUB_REF_NAME#v}/g" .github/release-notes.md; echo; echo "$generated"; } > notas.md
           gh release create "$GITHUB_REF_NAME" dist/* \
             --title "MD Viewer ${GITHUB_REF_NAME#v}" \
-            --generate-notes
+            --notes-file notas.md

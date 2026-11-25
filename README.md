@@ -91,6 +91,23 @@ Descarga el instalador de tu sistema desde
 | macOS (Apple Silicon) | `MdViewer-<versión>-osx-arm64.dmg` | Abrirlo y arrastrar **MD Viewer** a **Aplicaciones**. |
 | Debian / Ubuntu (x64) | `mdviewer_<versión>_amd64.deb` | `sudo apt install ./mdviewer_<versión>_amd64.deb` |
 
+### Primera instalación: avisos de seguridad
+
+Los instaladores **no están firmados con un certificado comercial**, así que Windows y macOS muestran un aviso la
+primera vez. Es normal: el código es abierto y puedes revisarlo o compilarlo tú mismo.
+
+- **Windows:** si aparece **"Windows protegió tu equipo"** (SmartScreen), haz clic en
+  **Más información → Ejecutar de todas formas**.
+- **macOS:** la app no está notarizada por Apple, así que la primera vez se bloquea:
+  - **macOS 15 o posterior:** intenta abrirla, luego ve a **Ajustes del Sistema → Privacidad y seguridad** y pulsa
+    **Abrir igualmente**.
+  - **macOS 14 o anterior:** clic derecho sobre la app → **Abrir** → **Abrir**.
+  - Si dice que la app **"está dañada"**, ejecuta en la Terminal y vuelve a abrirla:
+    ```bash
+    xattr -dr com.apple.quarantine "/Applications/MD Viewer.app"
+    ```
+- **Linux:** no muestra avisos.
+
 Para **actualizar**, instala la versión nueva encima de la anterior: el instalador de Windows la detecta, cierra la
 app si está abierta y la reemplaza conservando accesos directos; en macOS elige **Reemplazar**; en Linux `apt`
 reemplaza el paquete.

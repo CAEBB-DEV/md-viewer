@@ -1,0 +1,28 @@
+# Al cambiar las instrucciones de instalación (.github/release-notes.md), actualiza las notas de la última Release
+# para que la página de descargas siempre muestre las instrucciones vigentes. También se puede lanzar a mano.
+name: Notas de la Release
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/release-notes.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  notas:
+    name: Actualizar notas de la última Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instrucciones + lista automática de cambios
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view --json tagName -q .tagName)
+          generated=$(gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$tag" -q .body)
+          { sed "s/<versión>/${tag#v}/g" .github/release-notes.md; echo; echo "$generated"; } > notas.md
+          gh release edit "$tag" --notes-file notas.md
+          echo "Notas actualizadas en $tag"
