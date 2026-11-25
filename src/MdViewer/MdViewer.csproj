@@ -9,7 +9,7 @@
     <Product>MD Viewer</Product>
     <Authors>CAEBB</Authors>
     <!-- La sube automáticamente cada tarea "Instalador: ..." (tools/subir-version.*) -->
-    <Version>1.1</Version>
+    <Version>1.2</Version>
     <!-- Al publicar, precompila a código nativo: el arranque pasa de ~1,5 s a ~0,7 s (el .exe crece ~50 MB) -->
     <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
