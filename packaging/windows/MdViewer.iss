@@ -67,6 +67,18 @@ Root: HKA; Subkey: "Software\Classes\.md\OpenWithProgids"; ValueType: string; Va
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"; Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\shell\open\command"; ValueType: string; ValueData: """{app}\{#AppExe}"" ""%1"""
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\SupportedTypes"; ValueType: string; ValueName: ".md"; ValueData: ""
+; Si el usuario asoció los .md con MD Viewer usando "Elegir otra aplicación", Windows crea su propio tipo md_auto_file
+; (sin icono: muestra el del .exe). Si ese tipo abre MD Viewer, se le pone también el icono de documento.
+Root: HKCU; Subkey: "Software\Classes\md_auto_file\DefaultIcon"; ValueType: string; ValueData: """{app}\mdfile.ico"""; Check: AutoFileOpensApp; Flags: uninsdeletekey
+
+[Code]
+function AutoFileOpensApp: Boolean;
+var
+  Command: String;
+begin
+  Result := RegQueryStringValue(HKCU, 'Software\Classes\md_auto_file\shell\open\command', '', Command)
+            and (Pos(Lowercase('{#AppExe}'), Lowercase(Command)) > 0);
+end;
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent

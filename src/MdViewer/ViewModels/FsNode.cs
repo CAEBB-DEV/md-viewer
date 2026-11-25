@@ -21,7 +21,6 @@ public partial class FsNode : ObservableObject
     public string Name { get; }
     public string FullPath { get; }
     public bool IsFolder { get; }
-    public string Display => (IsFolder ? "📁 " : "📄 ") + Name;
     public ObservableCollection<FsNode> Children { get; } = [];
 
     [ObservableProperty]

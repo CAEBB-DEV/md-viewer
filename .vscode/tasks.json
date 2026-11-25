@@ -30,7 +30,8 @@
       "problemMatcher": []
     },
 
-    // ---------- Instaladores (resultado en dist/) ----------    {
+    // ---------- Instaladores (resultado en dist/) ----------    
+    {
       "label": "Instalador: Windows",
       "detail": "dist/MdViewer-Setup-<versión>.exe (en Windows; requiere Inno Setup 6)",
       "dependsOn": ["versión: subir", "publicar: win-x64"],

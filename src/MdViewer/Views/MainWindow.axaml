@@ -79,10 +79,14 @@
         <Style Selector="TreeView.explorer">
             <Setter Property="ItemTemplate">
                 <TreeDataTemplate x:DataType="vm:FsNode" ItemsSource="{Binding Children}">
-                    <Grid Classes="row" ColumnDefinitions="*,Auto" Background="Transparent" Tapped="ExplorerRowTapped">
-                        <TextBlock Text="{Binding Display}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                    <Grid Classes="row" ColumnDefinitions="Auto,*,Auto" Background="Transparent" Tapped="ExplorerRowTapped">
+                        <!-- Icono: el mismo de los .md en el sistema (hoja + logo) para archivos; carpeta para carpetas -->
+                        <Image Source="/Assets/mdfile.png" Width="18" Height="18" Margin="0,0,6,0"
+                               RenderOptions.BitmapInterpolationMode="HighQuality" IsVisible="{Binding !IsFolder}" />
+                        <TextBlock Text="📁" Margin="0,0,6,0" VerticalAlignment="Center" IsVisible="{Binding IsFolder}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                    ToolTip.Tip="{Binding FullPath}" />
-                        <Button Grid.Column="1" Classes="rowClose" IsVisible="{Binding IsRoot}"
+                        <Button Grid.Column="2" Classes="rowClose" IsVisible="{Binding IsRoot}"
                                 Command="{Binding $parent[TreeView].((vm:MainViewModel)DataContext).CloseItemCommand}"
                                 CommandParameter="{Binding}"
                                 AutomationProperties.Name="{Binding Name, StringFormat='Cerrar {0}'}"
