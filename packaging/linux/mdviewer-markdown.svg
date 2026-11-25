@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Icono de los archivos .md: hoja con esquina doblada y el logo de MD Viewer abajo a la derecha -->
+  <polygon points="36,8 144,8 196,60 196,248 36,248" fill="#FFFFFF" stroke="#8A94A6" stroke-width="6" stroke-linejoin="round" />
+  <polygon points="144,8 144,60 196,60" fill="#DDE3EA" stroke="#8A94A6" stroke-width="6" stroke-linejoin="round" />
+  <g fill="#B8C1CE">
+    <rect x="64" y="84" width="96" height="12" />
+    <rect x="64" y="112" width="116" height="12" />
+    <rect x="64" y="140" width="104" height="12" />
+    <rect x="64" y="168" width="64" height="12" />
+  </g>
+  <g transform="translate(126,120) scale(2.125)">
+    <polygon fill="#0D47A1" points="20.4,40.6 8.8,35.1 8.8,0 32,11.5 32,23 20.4,17.3" />
+    <polygon fill="#0D47A1" points="32,64 32,52.4 8.8,39.7 8.8,45.8" />
+    <polygon fill="#1976D2" points="43.6,40.6 55.2,35.1 55.2,0 32,11.5 32,23 43.6,17.3" />
+    <polygon fill="#1976D2" points="32,64 32,52.4 55.2,39.7 55.2,45.8" />
+  </g>
+</svg>

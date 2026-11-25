@@ -1,0 +1,274 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MdViewer.ViewModels"
+        xmlns:md="https://github.com/whistyun/Markdown.Avalonia"
+        xmlns:sh="clr-namespace:Markdown.Avalonia.SyntaxHigh.StyleCollections;assembly=Markdown.Avalonia.SyntaxHigh"
+        xmlns:ae="https://github.com/avaloniaui/avaloniaedit"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="650"
+        x:Class="MdViewer.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/app.ico"
+        Title="MD Viewer"
+        Width="1100" Height="720" MinWidth="360" MinHeight="300"
+        WindowState="Maximized">
+
+    <Design.DataContext>
+        <vm:MainViewModel />
+    </Design.DataContext>
+
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    </Window.KeyBindings>
+
+    <Window.Styles>
+        <!-- Visor y editor: barra de desplazamiento siempre visible, en el borde de la ventana -->
+        <Style Selector="md|MarkdownScrollViewer ScrollViewer, ae|TextEditor ScrollViewer">
+            <Setter Property="AllowAutoHide" Value="False" />
+        </Style>
+
+        <!-- Paneles con borde fino: Archivos, Carpetas, panel principal y barra de ancho -->
+        <Style Selector="Border.panel">
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="ClipToBounds" Value="True" />
+        </Style>
+
+        <!-- Encabezado de sección del explorador (título + botones compactos) -->
+        <Style Selector="Grid.sectionHeader">
+            <Setter Property="Margin" Value="10,6,6,4" />
+        </Style>
+        <Style Selector="Grid.sectionHeader Button">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="Margin" Value="4,0,0,0" />
+        </Style>
+        <!-- Botón ▾ para plegar/desplegar cada panel del explorador -->
+        <Style Selector="Grid.sectionHeader Button.collapse">
+            <Setter Property="Width" Value="22" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="-4,0,6,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Path.chevron">
+            <Setter Property="Data" Value="M2,4 L6,8 L10,4" />
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="StrokeThickness" Value="1.6" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="Stroke" Value="{Binding $parent[Button].Foreground}" />
+        </Style>
+        <!-- Plegado: la flecha apunta a la derecha -->
+        <Style Selector="Button.collapse.collapsed Path.chevron">
+            <Setter Property="RenderTransform" Value="rotate(-90deg)" />
+        </Style>
+        <!-- Separador entre paneles: muestra el cursor de cambiar alto -->
+        <Style Selector="GridSplitter">
+            <Setter Property="MinHeight" Value="6" />
+        </Style>
+
+        <!-- Árboles del explorador: misma plantilla y expansión perezosa.
+             Cada fila ocupa todo el ancho: un clic en una carpeta la despliega/pliega y los elementos de
+             primer nivel muestran un botón ✕ al pasar el mouse. -->
+        <Style Selector="TreeView.explorer">
+            <Setter Property="ItemTemplate">
+                <TreeDataTemplate x:DataType="vm:FsNode" ItemsSource="{Binding Children}">
+                    <Grid Classes="row" ColumnDefinitions="*,Auto" Background="Transparent" Tapped="ExplorerRowTapped">
+                        <TextBlock Text="{Binding Display}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                   ToolTip.Tip="{Binding FullPath}" />
+                        <Button Grid.Column="1" Classes="rowClose" IsVisible="{Binding IsRoot}"
+                                Command="{Binding $parent[TreeView].((vm:MainViewModel)DataContext).CloseItemCommand}"
+                                CommandParameter="{Binding}"
+                                AutomationProperties.Name="{Binding Name, StringFormat='Cerrar {0}'}"
+                                ToolTip.Tip="Cerrar (no borra nada del disco)">
+                            <Path Data="M2,2 L10,10 M10,2 L2,10" Width="12" Height="12" StrokeThickness="1.6"
+                                  StrokeLineCap="Round" Stroke="{Binding $parent[Button].Foreground}" />
+                        </Button>
+                    </Grid>
+                </TreeDataTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="TreeView.explorer TreeViewItem" x:DataType="vm:FsNode">
+            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+        </Style>
+        <Style Selector="TreeView.explorer TreeViewItem /template/ ContentPresenter#PART_HeaderPresenter">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="Button.rowClose">
+            <Setter Property="Width" Value="22" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="4,0,4,0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Opacity" Value="0" />
+        </Style>
+        <Style Selector="Grid.row:pointerover Button.rowClose">
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+    </Window.Styles>
+
+    <DockPanel>
+        <!-- Barra superior -->
+        <Border DockPanel.Dock="Top" Padding="8,6" BorderThickness="0,0,0,1"
+                BorderBrush="{DynamicResource LineBrush}">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Content="☰" Click="TogglePane" ToolTip.Tip="Mostrar/ocultar explorador" />
+                <TextBlock Grid.Column="1" Margin="12,0" VerticalAlignment="Center"
+                           Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
+                    <ToggleButton Content="Editar" IsChecked="{Binding IsEditing}"
+                                  IsEnabled="{Binding FileName, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    <Button Content="Guardar" Command="{Binding SaveCommand}" ToolTip.Tip="Ctrl+S" />
+                    <Button Content="◐" Click="ToggleTheme" ToolTip.Tip="Tema claro/oscuro" />
+                    <Button Click="ShowAbout" ToolTip.Tip="Acerca de" AutomationProperties.Name="Acerca de"
+                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                        <!-- Icono de información: círculo con una "i" -->
+                        <Path Width="16" Height="16" StrokeThickness="1.5" StrokeLineCap="Round"
+                              Stroke="{Binding $parent[Button].Foreground}"
+                              Data="M8,1.25 A6.75,6.75 0 1 1 7.99,1.25 Z M8,7.2 V11.6 M8,4.6 V4.7" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Mensaje de error -->
+        <TextBlock DockPanel.Dock="Top" Padding="12,6" Foreground="#E5484D" TextWrapping="Wrap"
+                   Text="{Binding Error}"
+                   IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+        <SplitView Name="Split" IsPaneOpen="True" DisplayMode="Inline" OpenPaneLength="400"
+                   PaneBackground="{Binding $parent[Window].Background}">
+            <SplitView.Pane>
+              <Grid ColumnDefinitions="*,Auto">
+                <!-- Explorador: Archivos arriba y Carpetas abajo (50 % al inicio). El separador cambia el alto;
+                     ▾ pliega cada panel hasta dejar solo su encabezado (ver ApplyExplorerLayout). -->
+                <Grid Name="ExplorerGrid" RowDefinitions="*,6,*" Margin="6,6,0,6">
+                    <Border Classes="panel">
+                        <DockPanel>
+                            <Grid Classes="sectionHeader" DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto">
+                                <Button Classes="collapse" Click="ToggleFilesPanel" AutomationProperties.Name="Plegar o desplegar Archivos"
+                                        ToolTip.Tip="Minimizar / expandir">
+                                    <Path Classes="chevron" />
+                                </Button>
+                                <TextBlock Grid.Column="1" Text="Archivos" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <Button Grid.Column="2" Content="+" Click="AddFile" AutomationProperties.Name="Agregar archivo"
+                                        ToolTip.Tip="Agregar archivos .md" />
+                            </Grid>
+                            <Panel Name="FilesBody">
+                                <TextBlock Text="Agrega archivos .md con +" TextWrapping="Wrap" Margin="12,4"
+                                           Opacity="0.6" IsVisible="{Binding !Files.Count}" />
+                                <TreeView Classes="explorer" ItemsSource="{Binding Files}"
+                                          SelectedItem="{Binding SelectedFile}"
+                                          SelectionChanged="ExplorerSelectionChanged">
+                                    <TreeView.KeyBindings>
+                                        <KeyBinding Gesture="Delete" Command="{Binding CloseItemCommand}" CommandParameter="{Binding SelectedFile}" />
+                                    </TreeView.KeyBindings>
+                                </TreeView>
+                            </Panel>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Separador arrastrable entre los dos paneles -->
+                    <GridSplitter Name="ExplorerSplitter" Grid.Row="1" ResizeDirection="Rows" Background="Transparent" />
+
+                    <Border Grid.Row="2" Classes="panel">
+                        <DockPanel>
+                            <Grid Classes="sectionHeader" DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto">
+                                <Button Classes="collapse" Click="ToggleFoldersPanel" AutomationProperties.Name="Plegar o desplegar Carpetas"
+                                        ToolTip.Tip="Minimizar / expandir">
+                                    <Path Classes="chevron" />
+                                </Button>
+                                <TextBlock Grid.Column="1" Text="Carpetas" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <Button Grid.Column="2" Content="+" Click="AddFolder" AutomationProperties.Name="Agregar carpeta"
+                                        ToolTip.Tip="Agregar carpetas" />
+                            </Grid>
+                            <Panel Name="FoldersBody">
+                                <TextBlock Text="Agrega carpetas con +" TextWrapping="Wrap" Margin="12,4"
+                                           Opacity="0.6" IsVisible="{Binding !Folders.Count}" />
+                                <TreeView Classes="explorer" ItemsSource="{Binding Folders}"
+                                          SelectedItem="{Binding SelectedFolderItem}"
+                                          SelectionChanged="ExplorerSelectionChanged">
+                                    <TreeView.KeyBindings>
+                                        <KeyBinding Gesture="Delete" Command="{Binding CloseItemCommand}" CommandParameter="{Binding SelectedFolderItem}" />
+                                    </TreeView.KeyBindings>
+                                </TreeView>
+                            </Panel>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+                <!-- Borde arrastrable para cambiar el ancho del explorador -->
+                <Thumb Grid.Column="1" Width="6" Cursor="SizeWestEast" Background="Transparent"
+                       DragDelta="ResizePane">
+                    <Thumb.Template>
+                        <ControlTemplate>
+                            <Border Background="{TemplateBinding Background}" />
+                        </ControlTemplate>
+                    </Thumb.Template>
+                </Thumb>
+              </Grid>
+            </SplitView.Pane>
+
+            <!-- Contenido: el visor centra el texto; el editor usa todo el ancho -->
+            <DockPanel Margin="0,6,6,6">
+            <!-- Barra inferior: ancho de lectura. Solo en el área del visor y solo al visualizar un archivo -->
+            <Border DockPanel.Dock="Bottom" Classes="panel" Margin="0,6,0,0" Padding="10,0"
+                    IsVisible="{Binding IsViewing}">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" TextElement.FontSize="11">
+                    <TextBlock Text="Ancho de lectura" VerticalAlignment="Center" Opacity="0.7" />
+                    <!-- Slider de Fluent a escala 0,75 para que la barra quede baja sin recortarlo -->
+                    <LayoutTransformControl VerticalAlignment="Center">
+                        <LayoutTransformControl.LayoutTransform>
+                            <ScaleTransform ScaleX="0.75" ScaleY="0.75" />
+                        </LayoutTransformControl.LayoutTransform>
+                        <Slider Name="WidthSlider" Width="190" Margin="0,-4"
+                                Minimum="480" Maximum="2400" Value="980" SmallChange="10" LargeChange="100"
+                                ValueChanged="ViewerWidthChanged" />
+                    </LayoutTransformControl>
+                    <TextBlock Text="{Binding #WidthSlider.Value, StringFormat={}{0:0} px}"
+                               MinWidth="44" VerticalAlignment="Center" Opacity="0.7" />
+                </StackPanel>
+            </Border>
+
+            <Border Classes="panel">
+            <Panel>
+                <Panel.Resources>
+                    <x:Double x:Key="ScrollBarSize">18</x:Double>
+                    <x:Double x:Key="ScrollBarThumbThickness">10</x:Double>
+                </Panel.Resources>
+
+                <TextBlock Text="Selecciona un archivo .md en el explorador"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.6"
+                           IsVisible="{Binding FileName, Converter={x:Static ObjectConverters.IsNull}}" />
+
+                <md:MarkdownScrollViewer Name="Viewer" Markdown="{Binding Markdown}" SelectionEnabled="True"
+                                         SelectionBrush="{DynamicResource ViewerSelectionBrush}"
+                                         IsVisible="{Binding !IsEditing}">
+                    <!-- Estilo tipo GitHub (claro/oscuro) en lugar del estilo propio de la librería.
+                         AppendixOfFluentTheme aporta el resaltado de sintaxis de los bloques de código. -->
+                    <md:MarkdownScrollViewer.MarkdownStyle>
+                        <Styles>
+                            <sh:AppendixOfFluentTheme />
+                            <StyleInclude Source="avares://MdViewer/Styles/GithubMarkdown.axaml" />
+                        </Styles>
+                    </md:MarkdownScrollViewer.MarkdownStyle>
+                </md:MarkdownScrollViewer>
+
+                <ae:TextEditor Name="Editor" Document="{Binding Document}" Padding="8,8,0,0"
+                               ShowLineNumbers="True" WordWrap="True" FontSize="14"
+                               FontFamily="Cascadia Code,Consolas,Menlo,DejaVu Sans Mono,monospace"
+                               IsVisible="{Binding IsEditing}" />
+            </Panel>
+            </Border>
+            </DockPanel>
+        </SplitView>
+    </DockPanel>
+</Window>

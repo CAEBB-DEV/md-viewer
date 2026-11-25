@@ -1,0 +1,46 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="MdViewer.Views.AboutWindow"
+        Title="Acerca de MD Viewer" Icon="/Assets/app.ico"
+        SizeToContent="WidthAndHeight" CanResize="False" ShowInTaskbar="False" CanMaximize="False" CanMinimize="False"
+        WindowStartupLocation="CenterOwner"
+        WindowDecorations="BorderOnly">
+    <!-- BorderOnly: sin barra de título, así la ventana no se puede arrastrar ni mover; se cierra con Cerrar o Esc -->
+
+    <!-- Mismo borde fino que los paneles de la ventana principal, para distinguirla del fondo -->
+    <Border BorderThickness="2" BorderBrush="{DynamicResource LineBrush}" CornerRadius="8">
+    <StackPanel Margin="28,24" Spacing="16" MinWidth="380">
+        <!-- Aplicación -->
+        <StackPanel Orientation="Horizontal" Spacing="14">
+            <Image Source="/Assets/app.ico" Width="48" Height="48" />
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="MD Viewer" FontSize="22" FontWeight="SemiBold" />
+                <TextBlock Text="Visor y editor de archivos Markdown" Opacity="0.7" />
+            </StackPanel>
+        </StackPanel>
+
+        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="16" RowSpacing="6">
+            <TextBlock Text="Versión" Opacity="0.7" />
+            <TextBlock Grid.Column="1" Name="VersionText" FontWeight="SemiBold" />
+            <TextBlock Grid.Row="1" Text="Publicación" Opacity="0.7" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Name="DateText" />
+            <TextBlock Grid.Row="2" Text="Tecnología" Opacity="0.7" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Name="TechText" TextWrapping="Wrap" MaxWidth="300" />
+        </Grid>
+
+        <Border Height="1" Background="{DynamicResource LineBrush}" />
+
+        <!-- Autor -->
+        <StackPanel Orientation="Horizontal" Spacing="14">
+            <Image Source="/Assets/autor.png" Height="64" />
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="Desarrollado por" Opacity="0.7" />
+                <TextBlock Text="CAEBB" FontSize="18" FontWeight="SemiBold" />
+            </StackPanel>
+        </StackPanel>
+
+        <Button Content="Cerrar" HorizontalAlignment="Right" MinWidth="90" IsDefault="True" IsCancel="True"
+                HorizontalContentAlignment="Center" Click="CloseClick" />
+    </StackPanel>
+    </Border>
+</Window>

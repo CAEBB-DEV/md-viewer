@@ -1,0 +1,28 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MdViewer.App"
+             RequestedThemeVariant="Default">
+             <!-- "Default" sigue el tema del sistema; el botón ◐ lo cambia a Light/Dark. -->
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <!-- LineBrush: líneas finas de bordes y separadores (Fluent2 no trae un recurso equivalente).
+                     ViewerSelectionBrush: selección de texto en el visor. -->
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="LineBrush" Color="#26000000" />
+                    <SolidColorBrush x:Key="ViewerSelectionBrush" Color="#4D0969DA" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="LineBrush" Color="#2EFFFFFF" />
+                    <SolidColorBrush x:Key="ViewerSelectionBrush" Color="#664493F8" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <Fluent2Theme />
+        <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
+    </Application.Styles>
+</Application>

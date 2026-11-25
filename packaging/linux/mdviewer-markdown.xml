@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Tipo text/markdown con el icono de documento de MD Viewer (se instala en /usr/share/mime/packages) -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="text/markdown">
+    <comment>Markdown document</comment>
+    <comment xml:lang="es">Documento Markdown</comment>
+    <icon name="mdviewer-markdown" />
+    <glob pattern="*.md" />
+    <glob pattern="*.markdown" />
+  </mime-type>
+</mime-info>

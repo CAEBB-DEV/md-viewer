@@ -1,0 +1,101 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["build", "${workspaceFolder}/MD_Viewer.slnx"],
+      "problemMatcher": "$msCompile",
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "watch",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["watch", "--project", "${workspaceFolder}/src/MdViewer/MdViewer.csproj"],
+      "problemMatcher": "$msCompile",
+      "isBackground": true
+    },
+
+    // ---------- Instaladores (resultado en dist/) ----------
+    {
+      "label": "Instalador: Windows",
+      "detail": "dist/MdViewer-Setup-<versión>.exe (en Windows; requiere Inno Setup 6)",
+      "dependsOn": ["versión: subir", "publicar: win-x64"],
+      "dependsOrder": "sequence",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/packaging/windows/build.ps1"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Instalador: macOS",
+      "detail": "dist/MdViewer-<versión>-osx-arm64.dmg (en un Mac)",
+      "dependsOn": ["versión: subir", "publicar: osx-arm64"],
+      "dependsOrder": "sequence",
+      "type": "process",
+      "command": "bash",
+      "args": ["packaging/macos/build.sh"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Instalador: Linux",
+      "detail": "dist/mdviewer_<versión>_amd64.deb (en Linux, o en Windows a través de WSL)",
+      "dependsOn": ["versión: subir", "publicar: linux-x64"],
+      "dependsOrder": "sequence",
+      "type": "process",
+      "command": "bash",
+      "args": ["packaging/linux/build.sh"],
+      "windows": { "command": "wsl", "args": ["bash", "packaging/linux/build.sh"] },
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+
+    // ---------- Versión: cada instalador sube el segundo número (1.3 -> 1.4) antes de publicar ----------
+    {
+      "label": "versión: subir",
+      "hide": true,
+      "type": "process",
+      "command": "bash",
+      "args": ["tools/subir-version.sh"],
+      "windows": { "command": "powershell", "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "tools/subir-version.ps1"] },
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+
+    // ---------- Publicación por plataforma (las usan los instaladores) ----------
+    {
+      "label": "publicar: win-x64",
+      "hide": true,
+      "type": "process",
+      "command": "dotnet",
+      "args": ["publish", "src/MdViewer/MdViewer.csproj", "-c", "Release", "-r", "win-x64", "--self-contained", "-p:DebugType=none",
+               "-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=true", "-o", "dist/publish/win-x64"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "publicar: osx-arm64",
+      "hide": true,
+      "type": "process",
+      "command": "dotnet",
+      "args": ["publish", "src/MdViewer/MdViewer.csproj", "-c", "Release", "-r", "osx-arm64", "--self-contained", "-p:DebugType=none",
+               "-o", "dist/publish/osx-arm64"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "publicar: linux-x64",
+      "hide": true,
+      "type": "process",
+      "command": "dotnet",
+      "args": ["publish", "src/MdViewer/MdViewer.csproj", "-c", "Release", "-r", "linux-x64", "--self-contained", "-p:DebugType=none",
+               "-o", "dist/publish/linux-x64"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}

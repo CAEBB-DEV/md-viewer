@@ -1,0 +1,177 @@
+<!--
+  Estilo tipo GitHub para el visor (Markdown.Avalonia), con paleta clara y oscura de GitHub (Primer).
+  Clases que genera Markdown.Avalonia: CTextBlock.Heading1-6 / .Paragraph / .ListMarker, CCode, CHyperlink,
+  Border.Blockquote, Border.Table / .TableHeader / .OddTableRow / .EvenTableRow, Border.CodeBlock, Rule.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ctxt="clr-namespace:ColorTextBlock.Avalonia;assembly=ColorTextBlock.Avalonia"
+        xmlns:mdc="clr-namespace:Markdown.Avalonia.Controls;assembly=Markdown.Avalonia"
+        xmlns:ae="https://github.com/avaloniaui/avaloniaedit">
+
+    <Styles.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <!-- El visor no pinta fondo propio: usa el mismo de la app (igual que el editor).
+                     Fondos y bordes son semitransparentes para verse bien sobre ese fondo. -->
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="GhFg" Color="#1F2328" />
+                    <SolidColorBrush x:Key="GhMuted" Color="#59636E" />
+                    <SolidColorBrush x:Key="GhBorder" Color="#26000000" />
+                    <SolidColorBrush x:Key="GhSubtle" Color="#0D000000" />
+                    <SolidColorBrush x:Key="GhCodeBg" Color="#14000000" />
+                    <SolidColorBrush x:Key="GhLink" Color="#0969DA" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="GhFg" Color="#D1D7E0" />
+                    <SolidColorBrush x:Key="GhMuted" Color="#9198A1" />
+                    <SolidColorBrush x:Key="GhBorder" Color="#29FFFFFF" />
+                    <SolidColorBrush x:Key="GhSubtle" Color="#0FFFFFFF" />
+                    <SolidColorBrush x:Key="GhCodeBg" Color="#1AFFFFFF" />
+                    <SolidColorBrush x:Key="GhLink" Color="#4493F8" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+            <FontFamily x:Key="GhFont">Segoe UI, Helvetica Neue, Noto Sans, Liberation Sans, Arial</FontFamily>
+            <FontFamily x:Key="GhMono">Cascadia Mono, Consolas, SF Mono, Menlo, Liberation Mono, monospace</FontFamily>
+        </ResourceDictionary>
+    </Styles.Resources>
+
+    <!-- Documento: texto centrado con ancho máximo (la barra inferior lo cambia desde código) -->
+    <Style Selector="StackPanel.Markdown_Avalonia_MarkdownViewer">
+        <Setter Property="MaxWidth" Value="980" />
+        <Setter Property="Margin" Value="32,24" />
+    </Style>
+
+    <!-- Texto base -->
+    <Style Selector="ctxt|CTextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource GhFont}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="Foreground" Value="{DynamicResource GhFg}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <!-- Color de la selección de texto (definido por tema en MainWindow.axaml) -->
+        <Setter Property="SelectionBrush" Value="{DynamicResource ViewerSelectionBrush}" />
+    </Style>
+
+    <!-- Cursor de texto en todo el documento (el puntero lo recibe el presentador, no los bloques de texto) -->
+    <Style Selector="ScrollViewer /template/ ScrollContentPresenter#PART_ContentPresenter">
+        <Setter Property="Cursor" Value="Ibeam" />
+    </Style>
+    <Style Selector="ctxt|CTextBlock.Paragraph">
+        <Setter Property="LineHeight" Value="24" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+    </Style>
+
+    <!-- Títulos -->
+    <Style Selector="ctxt|CTextBlock.Heading1, ctxt|CTextBlock.Heading2, ctxt|CTextBlock.Heading3, ctxt|CTextBlock.Heading4, ctxt|CTextBlock.Heading5, ctxt|CTextBlock.Heading6">
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Margin" Value="0,24,0,16" />
+    </Style>
+    <!-- GitHub subraya H1/H2 con una línea; CTextBlock no admite borde, así que no se replica -->
+    <Style Selector="ctxt|CTextBlock.Heading1">
+        <Setter Property="FontSize" Value="32" />
+    </Style>
+    <Style Selector="ctxt|CTextBlock.Heading2">
+        <Setter Property="FontSize" Value="24" />
+    </Style>
+    <Style Selector="ctxt|CTextBlock.Heading3">
+        <Setter Property="FontSize" Value="20" />
+    </Style>
+    <Style Selector="ctxt|CTextBlock.Heading4">
+        <Setter Property="FontSize" Value="16" />
+    </Style>
+    <Style Selector="ctxt|CTextBlock.Heading5">
+        <Setter Property="FontSize" Value="14" />
+    </Style>
+    <Style Selector="ctxt|CTextBlock.Heading6">
+        <Setter Property="FontSize" Value="13.6" />
+        <Setter Property="Foreground" Value="{DynamicResource GhMuted}" />
+    </Style>
+
+    <!-- Código en línea y enlaces -->
+    <Style Selector="ctxt|CCode">
+        <Setter Property="MonospaceFontFamily" Value="{StaticResource GhMono}" />
+        <Setter Property="FontSize" Value="13.6" />
+        <Setter Property="Foreground" Value="{DynamicResource GhFg}" />
+        <Setter Property="Background" Value="{DynamicResource GhCodeBg}" />
+        <Setter Property="Padding" Value="4,1" />
+        <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="ctxt|CHyperlink">
+        <Setter Property="Foreground" Value="{DynamicResource GhLink}" />
+        <Setter Property="HoverForeground" Value="{DynamicResource GhLink}" />
+        <Setter Property="IsUnderline" Value="False" />
+    </Style>
+
+    <!-- Listas -->
+    <Style Selector="Grid.List">
+        <Setter Property="Margin" Value="8,0,0,16" />
+    </Style>
+    <Style Selector="Grid.List Grid.List">
+        <Setter Property="Margin" Value="8,4,0,0" />
+    </Style>
+    <Style Selector="Grid.List ctxt|CTextBlock.Paragraph">
+        <Setter Property="Margin" Value="0,2" />
+    </Style>
+    <Style Selector="ctxt|CTextBlock.ListMarker">
+        <Setter Property="Margin" Value="0,2,6,2" />
+        <Setter Property="LineHeight" Value="24" />
+    </Style>
+
+    <!-- Cita -->
+    <Style Selector="Border.Blockquote">
+        <Setter Property="BorderBrush" Value="{DynamicResource GhBorder}" />
+        <Setter Property="BorderThickness" Value="4,0,0,0" />
+        <Setter Property="Padding" Value="16,0,16,0" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+    </Style>
+    <Style Selector="Border.Blockquote ctxt|CTextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource GhMuted}" />
+    </Style>
+    <Style Selector="Border.Blockquote ctxt|CTextBlock.Paragraph:nth-last-child(1)">
+        <Setter Property="Margin" Value="0" />
+    </Style>
+
+    <!-- Línea horizontal -->
+    <!-- Rule no admite color: se deja el grosor por defecto, solo se ajusta el espacio -->
+    <Style Selector="mdc|Rule">
+        <Setter Property="Margin" Value="0,24" />
+    </Style>
+
+    <!-- Tablas: bordes de 1 px, filas pares con fondo, ancho según contenido -->
+    <Style Selector="Border.Table">
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="BorderBrush" Value="{DynamicResource GhBorder}" />
+        <Setter Property="BorderThickness" Value="1,1,0,0" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+    </Style>
+    <Style Selector="Border.TableHeader, Border.OddTableRow, Border.EvenTableRow">
+        <Setter Property="BorderBrush" Value="{DynamicResource GhBorder}" />
+        <Setter Property="BorderThickness" Value="0,0,1,1" />
+        <Setter Property="Padding" Value="13,6" />
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.EvenTableRow">
+        <Setter Property="Background" Value="{DynamicResource GhSubtle}" />
+    </Style>
+    <Style Selector="Border.TableHeader ctxt|CTextBlock">
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- Bloque de código -->
+    <Style Selector="Border.CodeBlock">
+        <Setter Property="Background" Value="{DynamicResource GhSubtle}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="Margin" Value="0,0,0,16" />
+    </Style>
+    <Style Selector="Border.CodeBlock ae|TextEditor">
+        <Setter Property="FontFamily" Value="{StaticResource GhMono}" />
+        <Setter Property="FontSize" Value="13.6" />
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.CodeBlock Label.LangInfo">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+</Styles>

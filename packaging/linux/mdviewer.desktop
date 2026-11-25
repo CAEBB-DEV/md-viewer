@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=MD Viewer
+Comment=Visor y editor de archivos Markdown
+Exec=mdviewer %f
+Icon=mdviewer
+Terminal=false
+Categories=Office;TextEditor;Utility;
+MimeType=text/markdown;
