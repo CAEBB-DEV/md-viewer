@@ -12,24 +12,32 @@ namespace MdViewer.ViewModels;
 
 public enum UnsavedChoice { Save, Discard, Cancel }
 
+/// <summary>
+/// Explorador y documento mostrado. Como las pestañas de VS Code: "Archivos" lista los archivos abiertos, cada uno
+/// con sus propios cambios sin guardar. Un clic en "Carpetas" abre una vista previa que no se lista; pasa a
+/// "Archivos" con doble clic o al editarla, y la siguiente vista previa la reemplaza.
+/// </summary>
 public partial class MainViewModel : ObservableObject
 {
-    /// <summary>Carpetas y archivos agregados al explorador, una ruta por línea.</summary>
+    /// <summary>Carpetas y archivos abiertos del explorador, una ruta por línea.</summary>
     static readonly string ListPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MdViewer", "explorador.txt");
 
     static readonly StringComparison PathComparison =
         OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
-    string? _path;
+    /// <summary>Documento mostrado: uno de <see cref="Files"/> o la vista previa (abierto desde "Carpetas").</summary>
+    FsNode? _active;
 
-    /// <summary>Archivos .md agregados sueltos (sección superior del explorador).</summary>
+    /// <summary>Archivos abiertos (sección superior del explorador).</summary>
     public ObservableCollection<FsNode> Files { get; } = [];
 
     /// <summary>Carpetas agregadas (sección inferior del explorador).</summary>
     public ObservableCollection<FsNode> Folders { get; } = [];
 
-    public TextDocument Document { get; } = new();
+    /// <summary>Texto del documento mostrado (cada archivo abierto tiene el suyo).</summary>
+    [ObservableProperty]
+    public partial TextDocument Document { get; set; } = new();
 
     [ObservableProperty]
     public partial FsNode? SelectedFile { get; set; }
@@ -68,6 +76,7 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Hay un archivo abierto en modo visualización (muestra la barra de ancho de lectura).</summary>
     public bool IsViewing => FileName is not null && !IsEditing;
 
+    /// <summary>El documento mostrado tiene cambios sin guardar.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Title))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
@@ -76,20 +85,22 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Title))]
     [NotifyPropertyChangedFor(nameof(IsViewing))]
-    [NotifyPropertyChangedFor(nameof(DocumentFolder), nameof(ShowNativeViewer), nameof(ShowWebViewer))]
+    [NotifyPropertyChangedFor(nameof(ShowNativeViewer), nameof(ShowWebViewer))]
     public partial string? FileName { get; set; }
 
     /// <summary>Carpeta del archivo abierto: base para las imágenes con ruta relativa (logo.png, docs/captura.png).</summary>
-    public string? DocumentFolder => _path is null ? null : Path.GetDirectoryName(_path);
+    public string? DocumentFolder => _active is null ? null : Path.GetDirectoryName(_active.FullPath);
 
     [ObservableProperty]
     public partial string? Error { get; set; }
 
     public string Title => FileName is null ? "MD Viewer" : FileName + (IsDirty ? " •" : "");
 
+    /// <summary>Algún archivo abierto tiene cambios sin guardar (se pregunta al cerrar la app).</summary>
+    public bool HasUnsaved => Files.Any(f => f.IsDirty);
+
     public MainViewModel()
     {
-        Document.TextChanged += (_, _) => IsDirty = true;
         try
         {
             if (File.Exists(ListPath))
@@ -101,16 +112,26 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>Agrega carpetas o archivos al explorador (sin duplicados) y guarda la lista.</summary>
-    public void Add(IEnumerable<string> paths)
+    /// <summary>Agrega carpetas al explorador (sin duplicados) y guarda la lista.</summary>
+    public void AddFolders(IEnumerable<string> paths)
     {
         AddNodes(paths);
         SaveList();
     }
 
+    void AddNodes(IEnumerable<string> paths)
+    {
+        foreach (var path in paths)
+        {
+            if (Files.Concat(Folders).Any(r => SamePath(r.FullPath, path))) continue;
+            var node = FsNode.FromPath(path);
+            (node.IsFolder ? Folders : Files).Add(node);
+        }
+    }
+
     /// <summary>
-    /// Archivo abierto desde fuera de la app (Explorador de Windows, "Abrir con", línea de comandos):
-    /// se agrega a "Archivos" y se selecciona, lo que lo abre.
+    /// Archivo abierto desde fuera de la app (Explorador de Windows, "Abrir con", línea de comandos) o un enlace
+    /// a otro .md: se agrega a "Archivos" y se muestra.
     /// </summary>
     public void OpenExternal(string path)
     {
@@ -120,42 +141,151 @@ public partial class MainViewModel : ObservableObject
             Error = "No se encontró el archivo: " + path;
             return;
         }
-        Add([path]);
-        SelectedFile = Files.FirstOrDefault(f => string.Equals(Path.GetFullPath(f.FullPath), path, PathComparison));
+        OpenFiles([path]);
     }
 
-    void AddNodes(IEnumerable<string> paths)
+    /// <summary>Agrega los archivos a "Archivos" y muestra el último.</summary>
+    public void OpenFiles(IEnumerable<string> paths)
     {
-        foreach (var path in paths)
+        FsNode? last = null;
+        foreach (var path in paths.Select(Path.GetFullPath))
         {
-            if (Files.Concat(Folders).Any(r => string.Equals(r.FullPath, path, PathComparison))) continue;
-            var node = FsNode.FromPath(path);
-            (node.IsFolder ? Folders : Files).Add(node);
+            last = FindOpen(path) ?? (IsPreview(path) ? _active! : FsNode.FromPath(path));
+            Keep(last);
         }
+        if (last is not null) Activate(last);
     }
+
+    /// <summary>Doble clic en un archivo del explorador: se muestra y queda en "Archivos".</summary>
+    public void KeepOpen(FsNode node)
+    {
+        if (node.IsFolder || !Preview(node.FullPath)) return;
+        Keep(_active!);
+        SyncSelection();
+    }
+
+    FsNode? FindOpen(string path) => Files.FirstOrDefault(f => SamePath(f.FullPath, path));
+
+    bool IsPreview(string path) => _active is not null && !Files.Contains(_active) && SamePath(_active.FullPath, path);
+
+    static bool SamePath(string a, string b) => string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), PathComparison);
+
+    // Pasa a la lista de "Archivos" (si no estaba)
+    void Keep(FsNode node)
+    {
+        if (Files.Contains(node)) return;
+        Files.Add(node);
+        SaveList();
+    }
+
+    // Muestra un archivo de "Carpetas": el que ya está en "Archivos" (con sus cambios) o una vista previa nueva
+    bool Preview(string path) =>
+        FindOpen(path) is { } open ? Activate(open) : IsPreview(path) || Activate(FsNode.FromPath(path));
+
+    /// <summary>Muestra el archivo. Devuelve false si no se pudo leer.</summary>
+    bool Activate(FsNode node)
+    {
+        if (node != _active)
+        {
+            if (!Load(node)) return false;
+            _active = node;
+            FileName = node.Name;
+            Document = node.Document!;
+            IsDirty = node.IsDirty;
+            Markdown = node.Document!.Text;
+            IsEditing = node.IsEditing;
+            Error = null;
+            OnPropertyChanged(nameof(DocumentFolder));
+        }
+        SyncSelection();
+        return true;
+    }
+
+    // Lee el archivo del disco, salvo que tenga cambios sin guardar (así se ve lo último si cambió por fuera)
+    bool Load(FsNode node)
+    {
+        if (node.Document is not null && node.IsDirty) return true;
+        string text;
+        try { text = File.ReadAllText(node.FullPath); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Error = e.Message;
+            return false;
+        }
+        if (node.Document is null)
+        {
+            node.Document = new TextDocument(text);
+            node.Document.TextChanged += (_, _) => MarkDirty(node);
+        }
+        else if (node.Document.Text != text)
+        {
+            node.Document.Text = text;
+            node.Document.UndoStack.ClearAll();
+            node.IsDirty = false;
+        }
+        return true;
+    }
+
+    void MarkDirty(FsNode node)
+    {
+        node.IsDirty = true;
+        if (node == _active) IsDirty = true;
+    }
+
+    // La selección de "Archivos" sigue al documento mostrado; si está ahí, se quita la de "Carpetas" (así un
+    // nuevo clic en ese archivo de "Carpetas" vuelve a funcionar)
+    void SyncSelection() => WithoutOpening(() =>
+    {
+        SelectedFile = _active is not null && Files.Contains(_active) ? _active : null;
+        if (SelectedFile is not null) SelectedFolderItem = null;
+    });
 
     /// <summary>
-    /// Saca de la lista un archivo de "Archivos" o la carpeta raíz que contiene <paramref name="node"/> en
-    /// "Carpetas" (botón ✕ de la fila o Supr sobre la selección). No toca el disco.
+    /// Botón ✕ de una fila o Supr: cierra un archivo de "Archivos" (preguntando si tiene cambios) o saca de la
+    /// lista la carpeta raíz que contiene <paramref name="node"/>. No toca el disco.
     /// </summary>
     [RelayCommand]
     Task CloseItem(FsNode? node)
     {
         if (node is null) return Task.CompletedTask;
-        if (Files.Contains(node)) return CloseRootAsync(node, Files);
-        var root = Folders.FirstOrDefault(f => IsUnder(node.FullPath, f.FullPath));
-        return root is null ? Task.CompletedTask : CloseRootAsync(root, Folders);
+        if (Files.Contains(node)) return CloseFileAsync(node);
+        if (Folders.FirstOrDefault(f => IsUnder(node.FullPath, f.FullPath)) is { } root)
+        {
+            Folders.Remove(root);
+            SaveList();
+            // La vista previa (nunca tiene cambios: editarla la pasa a "Archivos") se cierra con su carpeta
+            if (_active is not null && IsPreview(_active.FullPath) && IsUnder(_active.FullPath, root.FullPath)) CloseDocument();
+        }
+        return Task.CompletedTask;
     }
 
-    // Si el archivo abierto está dentro de lo que se cierra, se pregunta por los cambios pendientes
-    // y, si el usuario continúa, también se cierra en el visor.
-    async Task CloseRootAsync(FsNode root, ObservableCollection<FsNode> list)
+    /// <summary>Botón ✕ de la barra superior: cierra el documento mostrado y lo quita de "Archivos".</summary>
+    [RelayCommand]
+    Task CloseView()
     {
-        var affectsOpen = _path is not null && IsUnder(_path, root.FullPath);
-        if (affectsOpen && !await CanLeaveAsync()) return;
-        list.Remove(root);
+        if (_active is null) return Task.CompletedTask;
+        if (Files.Contains(_active)) return CloseFileAsync(_active);
+        CloseDocument();
+        return Task.CompletedTask;
+    }
+
+    // Si se cierra el documento mostrado, pasa al archivo vecino de la lista (como al cerrar una pestaña)
+    async Task CloseFileAsync(FsNode node)
+    {
+        if (!await ConfirmSaveAsync(node)) return;
+        var index = Files.IndexOf(node);
+        Files.Remove(node);
         SaveList();
-        if (affectsOpen) CloseDocument();
+        node.Document = null;
+        node.IsDirty = false;
+        node.IsEditing = false;
+        if (node != _active)
+        {
+            SyncSelection();
+            return;
+        }
+        var next = Files.Count == 0 ? null : Files[Math.Min(index, Files.Count - 1)];
+        if (next is null || !Activate(next)) CloseDocument();
     }
 
     static bool IsUnder(string path, string root)
@@ -165,27 +295,17 @@ public partial class MainViewModel : ObservableObject
         return path.Equals(root, PathComparison) || path.StartsWith(root + Path.DirectorySeparatorChar, PathComparison);
     }
 
-    /// <summary>
-    /// Botón ✕ de la barra superior: deja de mostrar el documento (sigue en el explorador). Si hay cambios sin
-    /// guardar pregunta antes, igual que al cambiar de archivo.
-    /// </summary>
-    [RelayCommand]
-    async Task CloseView()
-    {
-        if (await CanLeaveAsync()) CloseDocument();
-    }
-
     // Se quita la selección para que un clic en el archivo lo vuelva a abrir
     void CloseDocument()
     {
+        _active = null;
         WithoutOpening(() => { SelectedFile = null; SelectedFolderItem = null; });
-        _path = null;
         FileName = null;
         IsEditing = false;
-        Document.Text = "";
-        Document.UndoStack.ClearAll();
+        Document = new TextDocument();
         IsDirty = false;
         Markdown = "";
+        OnPropertyChanged(nameof(DocumentFolder));
     }
 
     void SaveList()
@@ -206,24 +326,18 @@ public partial class MainViewModel : ObservableObject
 
     bool _revertingSelection;
 
-    // Solo un panel tiene selección: al elegir algo en uno se quita la del otro. Si no, volver a hacer clic
-    // en un archivo que sigue seleccionado en el otro panel no lo abriría (la selección no cambia).
     partial void OnSelectedFileChanged(FsNode? oldValue, FsNode? newValue)
     {
-        if (!_revertingSelection && newValue is not null)
-            _ = OpenFromTreeAsync(newValue, () => SelectedFile = oldValue, () => SelectedFolderItem = null);
+        if (_revertingSelection || newValue is null) return;
+        if (!Activate(newValue)) WithoutOpening(() => SelectedFile = oldValue);
     }
 
+    // Un archivo de "Carpetas" se muestra como vista previa (no pasa a "Archivos" con un solo clic)
     partial void OnSelectedFolderItemChanged(FsNode? oldValue, FsNode? newValue)
     {
-        if (_revertingSelection || newValue is null) return;
-        if (newValue.IsFolder) WithoutOpening(() => SelectedFile = null);
-        else _ = OpenFromTreeAsync(newValue, () => SelectedFolderItem = oldValue, () => SelectedFile = null);
+        if (_revertingSelection || newValue is null || newValue.IsFolder) return;
+        if (!Preview(newValue.FullPath)) WithoutOpening(() => SelectedFolderItem = oldValue);
     }
-
-    // Si el usuario cancela, la selección del árbol vuelve a donde estaba; si se abrió, se limpia el otro panel
-    async Task OpenFromTreeAsync(FsNode node, Action revertSelection, Action clearOtherPanel) =>
-        WithoutOpening(await OpenAsync(node.FullPath) ? clearOtherPanel : revertSelection);
 
     void WithoutOpening(Action changeSelection)
     {
@@ -233,61 +347,58 @@ public partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Permite dejar el archivo actual: true si no hay cambios, o si el usuario eligió guardar (y se guardó)
-    /// o no guardar. False si canceló o falló el guardado.
+    /// Antes de cerrar un archivo con cambios: true si el usuario eligió guardar (y se guardó) o no guardar.
+    /// False si canceló o falló el guardado.
     /// </summary>
-    public async Task<bool> CanLeaveAsync()
+    async Task<bool> ConfirmSaveAsync(FsNode node)
     {
-        if (!IsDirty || ConfirmUnsaved is null) return true;
-        return await ConfirmUnsaved(FileName ?? "") switch
+        if (!node.IsDirty || ConfirmUnsaved is null) return true;
+        return await ConfirmUnsaved(node.Name) switch
         {
-            UnsavedChoice.Save => TrySave(),
+            UnsavedChoice.Save => TrySave(node),
             UnsavedChoice.Discard => true,
             _ => false,
         };
     }
 
-    /// <summary>Abre un archivo. Devuelve false si no se abrió (cancelado o error de lectura).</summary>
-    public async Task<bool> OpenAsync(string path)
+    /// <summary>Al cerrar la app: pregunta por cada archivo con cambios (mostrándolo). False si se canceló.</summary>
+    public async Task<bool> ConfirmCloseAllAsync()
     {
-        path = Path.GetFullPath(path);
-        if (path == _path) return true;
-        if (!await CanLeaveAsync()) return false;
-
-        string text;
-        try { text = File.ReadAllText(path); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        foreach (var node in Files.Where(f => f.IsDirty).ToList())
         {
-            Error = e.Message;
-            return false;
+            Activate(node);
+            if (!await ConfirmSaveAsync(node)) return false;
         }
-
-        _path = path;
-        FileName = Path.GetFileName(path);
-        Document.Text = text;
-        Document.UndoStack.ClearAll();
-        IsDirty = false;
-        Markdown = text;
-        Error = null;
         return true;
     }
 
     partial void OnIsEditingChanged(bool value)
     {
-        if (!value) Markdown = Document.Text;
+        if (_active is null) return;
+        _active.IsEditing = value;
+        if (value)
+        {
+            Keep(_active); // editar una vista previa la deja en "Archivos"
+            SyncSelection();
+        }
+        else Markdown = Document.Text;
     }
 
     [RelayCommand(CanExecute = nameof(IsDirty))]
-    void Save() => TrySave();
+    void Save()
+    {
+        if (_active is not null) TrySave(_active);
+    }
 
     /// <summary>Guarda si hay cambios (solo por acción del usuario). Devuelve false si falló la escritura.</summary>
-    public bool TrySave()
+    bool TrySave(FsNode node)
     {
-        if (!IsDirty || _path is null) return true;
+        if (!node.IsDirty || node.Document is null) return true;
         try
         {
-            File.WriteAllText(_path, Document.Text);
-            IsDirty = false;
+            File.WriteAllText(node.FullPath, node.Document.Text);
+            node.IsDirty = false;
+            if (node == _active) IsDirty = false;
             Error = null;
             return true;
         }

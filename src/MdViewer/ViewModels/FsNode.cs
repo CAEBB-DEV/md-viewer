@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using AvaloniaEdit.Document;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace MdViewer.ViewModels;
@@ -55,6 +56,18 @@ public partial class FsNode : ObservableObject
 
     /// <summary>Agregado por el usuario (primer nivel del explorador): muestra el botón ✕ para cerrarlo.</summary>
     public bool IsRoot { get; init; }
+
+    // ---------- Solo archivos abiertos (panel "Archivos" o vista previa): cada uno guarda su propio estado ----------
+
+    /// <summary>Texto en memoria (con su historial de deshacer); null hasta que se abre por primera vez.</summary>
+    public TextDocument? Document { get; set; }
+
+    /// <summary>Tiene cambios sin guardar: el panel "Archivos" lo marca con ●.</summary>
+    [ObservableProperty]
+    public partial bool IsDirty { get; set; }
+
+    /// <summary>Estaba en modo edición la última vez que se mostró.</summary>
+    public bool IsEditing { get; set; }
 
     /// <summary>Nodo raíz para una ruta agregada por el usuario (carpeta o archivo).</summary>
     public static FsNode FromPath(string path)

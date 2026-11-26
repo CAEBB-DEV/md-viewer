@@ -8,14 +8,17 @@
         <ResourceDictionary>
             <ResourceDictionary.ThemeDictionaries>
                 <!-- LineBrush: líneas finas de bordes y separadores (Fluent2 no trae un recurso equivalente).
-                     ViewerSelectionBrush: selección de texto en el visor. -->
+                     ViewerSelectionBrush: selección de texto en el visor.
+                     ModifiedBrush: archivo con cambios sin guardar en "Archivos" (ámbar "attention" de GitHub). -->
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="LineBrush" Color="#26000000" />
                     <SolidColorBrush x:Key="ViewerSelectionBrush" Color="#4D0969DA" />
+                    <SolidColorBrush x:Key="ModifiedBrush" Color="#9A6700" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="LineBrush" Color="#2EFFFFFF" />
                     <SolidColorBrush x:Key="ViewerSelectionBrush" Color="#664493F8" />
+                    <SolidColorBrush x:Key="ModifiedBrush" Color="#D29922" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>

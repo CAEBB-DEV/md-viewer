@@ -59,6 +59,8 @@ public partial class MainWindow : Window
         Opened += (_, _) => _registryTask ??= Task.Run(() => new RegistryOptions(ThemeName.LightPlus));
         ActualThemeVariantChanged += (_, _) => ApplyEditorTheme();
         ApplyExplorerLayout();
+        LayoutUpdated += (_, _) => UpdateFilesMinHeight(); // al abrir/cerrar archivos y al cambiar el tamaño
+        ShowWidth();
         Viewer.AddHandler(KeyDownEvent, CopyViewerSelection, RoutingStrategies.Tunnel);
         Viewer.AddHandler(PointerPressedEvent, SelectWordOrParagraph, RoutingStrategies.Tunnel);
         Viewer.AddHandler(PointerReleasedEvent, KeepMultiClickSelection, RoutingStrategies.Tunnel);
@@ -192,71 +194,87 @@ public partial class MainWindow : Window
     {
         var folders = await StorageProvider.OpenFolderPickerAsync(
             new FolderPickerOpenOptions { Title = "Agregar carpetas", AllowMultiple = true });
-        Vm.Add(folders.Select(f => f.TryGetLocalPath()).OfType<string>());
+        Vm.AddFolders(folders.Select(f => f.TryGetLocalPath()).OfType<string>());
     }
 
     async void AddFile(object? sender, RoutedEventArgs e)
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Agregar archivos Markdown",
+            Title = "Abrir archivos Markdown",
             AllowMultiple = true,
             FileTypeFilter = [new FilePickerFileType("Markdown") { Patterns = ["*.md"] }],
         });
-        Vm.Add(files.Select(f => f.TryGetLocalPath()).OfType<string>());
+        Vm.OpenFiles(files.Select(f => f.TryGetLocalPath()).OfType<string>());
     }
 
     // Arrastrar el borde derecho del explorador cambia su ancho
     void ResizePane(object? sender, VectorEventArgs e) =>
         Split.OpenPaneLength = Math.Clamp(Split.OpenPaneLength + e.Vector.X, 160, Math.Max(160, Bounds.Width - 300));
 
-    // ---------- Paneles Archivos / Carpetas: alto con el separador y botón ▾ para plegarlos ----------
+    // ---------- Paneles Archivos / Carpetas: alto con el separador y botón ▾ para plegar Carpetas ----------
+    // Archivos no se pliega y nunca baja de la mitad del alto; Carpetas se puede plegar hasta su encabezado.
 
     const double PanelMinHeight = 90;
     GridLength _filesHeight = new(1, GridUnitType.Star), _foldersHeight = new(1, GridUnitType.Star);
 
     // Clic en cualquier parte del encabezado (flecha, título o espacio vacío), salvo en el botón +
-    void FilesHeaderTapped(object? sender, TappedEventArgs e)
-    {
-        if (!IsOnButton(e)) TogglePanel(FilesBody, FoldersBody);
-    }
-
     void FoldersHeaderTapped(object? sender, TappedEventArgs e)
     {
-        if (!IsOnButton(e)) TogglePanel(FoldersBody, FilesBody);
-    }
-
-    static bool IsOnButton(RoutedEventArgs e) => (e.Source as Visual)?.FindAncestorOfType<Button>(includeSelf: true) is not null;
-
-    // Siempre queda un panel abierto: minimizar uno con el otro ya minimizado abre el otro
-    void TogglePanel(Control body, Control other)
-    {
-        // Recuerda el alto actual de los paneles abiertos (incluido lo ajustado con el separador)
-        if (FilesBody.IsVisible) _filesHeight = ExplorerGrid.RowDefinitions[0].Height;
-        if (FoldersBody.IsVisible) _foldersHeight = ExplorerGrid.RowDefinitions[2].Height;
-        body.IsVisible = !body.IsVisible;
-        if (!body.IsVisible) other.IsVisible = true;
+        if ((e.Source as Visual)?.FindAncestorOfType<Button>(includeSelf: true) is not null) return;
+        // Recuerda el alto actual de los paneles (incluido lo ajustado con el separador)
+        if (FoldersBody.IsVisible)
+        {
+            _filesHeight = ExplorerGrid.RowDefinitions[0].Height;
+            _foldersHeight = ExplorerGrid.RowDefinitions[2].Height;
+        }
+        FoldersBody.IsVisible = !FoldersBody.IsVisible;
         ApplyExplorerLayout();
     }
 
-    // Panel abierto: ocupa su alto (proporcional). Minimizado: solo su encabezado, sin separador.
+    // Carpetas abierto: cada panel ocupa su alto (proporcional). Plegado: solo su encabezado, sin separador.
     void ApplyExplorerLayout()
     {
         var rows = ExplorerGrid.RowDefinitions;
-        bool filesOpen = FilesBody.IsVisible, foldersOpen = FoldersBody.IsVisible;
-        rows[0].Height = filesOpen ? _filesHeight : GridLength.Auto;
-        rows[0].MinHeight = filesOpen ? PanelMinHeight : 0;
+        var foldersOpen = FoldersBody.IsVisible;
+        rows[0].Height = foldersOpen ? _filesHeight : new GridLength(1, GridUnitType.Star);
         rows[2].Height = foldersOpen ? _foldersHeight : GridLength.Auto;
         rows[2].MinHeight = foldersOpen ? PanelMinHeight : 0;
-        ExplorerSplitter.IsVisible = filesOpen && foldersOpen;
-        FilesToggle.Classes.Set("collapsed", !filesOpen);
+        ExplorerSplitter.IsVisible = foldersOpen;
         FoldersToggle.Classes.Set("collapsed", !foldersOpen);
+    }
+
+    // Archivos nunca tapa un archivo abierto: su alto mínimo es el que necesita para mostrarlos todos (crece al abrir
+    // más y el separador no lo deja bajar de ahí). Tope: Carpetas conserva su mínimo; si no caben, Archivos se desplaza.
+    void UpdateFilesMinHeight()
+    {
+        // Alto de las filas (no el del área desplazable, que se estira hasta llenar el panel)
+        var rows = FilesTree.GetRealizedContainers().ToList();
+        var content = FilesHint.IsVisible
+            ? FilesHint.Bounds.Height + FilesHint.Margin.Top + FilesHint.Margin.Bottom
+            : rows.Count == 0 ? 0 : rows.Average(r => r.Bounds.Height) * FilesTree.ItemCount + FilesTree.Padding.Top + FilesTree.Padding.Bottom;
+        var needed = FilesHeader.Bounds.Bottom + FilesHeader.Margin.Bottom + content + 2; // + borde del panel
+        var max = ExplorerGrid.Bounds.Height - ExplorerGrid.RowDefinitions[1].ActualHeight
+                  - (FoldersBody.IsVisible ? PanelMinHeight : FoldersBody.FindAncestorOfType<Border>()?.Bounds.Height ?? 0);
+        var min = Math.Round(Math.Max(0, Math.Min(needed, max)));
+        var row = ExplorerGrid.RowDefinitions[0];
+        if (Math.Abs(row.MinHeight - min) > 0.5) row.MinHeight = min;
     }
 
     // Clic en cualquier parte de la fila de una carpeta: la despliega o la pliega (no hace falta atinar a la flecha)
     void ExplorerRowTapped(object? sender, TappedEventArgs e)
     {
         if (sender is Control { DataContext: FsNode { IsFolder: true } folder }) folder.IsExpanded = !folder.IsExpanded;
+    }
+
+    // Doble clic en un archivo de Carpetas: deja de ser vista previa y pasa a Archivos.
+    // En una carpeta, el primer clic ya la desplegó; se marca como atendido para que el TreeViewItem no la vuelva
+    // a plegar (él también alterna con doble clic) y dos clics rápidos no la dejen como estaba.
+    void ExplorerRowDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is not Control { DataContext: FsNode node }) return;
+        if (node.IsFolder) e.Handled = true;
+        else Vm.KeepOpen(node);
     }
 
     // En pantallas angostas el explorador se superpone y se cierra al abrir un archivo
@@ -279,10 +297,37 @@ public partial class MainWindow : Window
     // Barra inferior: ancho máximo del texto en el visor (lo usa Styles/GithubMarkdown.axaml)
     void ViewerWidthChanged(object? sender, RangeBaseValueChangedEventArgs e)
     {
+        ShowWidth();
         ApplyViewerWidth();
         if (_webViewer?.IsVisible == true) _ = _webViewer.InvokeScript($"setWidth({Math.Round(e.NewValue / 2) * 2})");
         else _webRendered = null; // se vuelve a generar con el ancho nuevo la próxima vez que se muestre
     }
+
+    // Cuadro de texto del ancho: muestra el valor del slider; lo escrito se aplica con Enter (dentro de los límites)
+    void ShowWidth()
+    {
+        if (WidthBox is not null && WidthSlider is not null) WidthBox.Text = Math.Round(WidthSlider.Value).ToString();
+    }
+
+    void WidthBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            if (int.TryParse(WidthBox.Text?.Trim(), out var width))
+                WidthSlider.Value = Math.Clamp(width, WidthSlider.Minimum, WidthSlider.Maximum);
+            ShowWidth(); // también corrige un valor fuera de rango o no numérico
+            WidthBox.SelectAll();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            ShowWidth();
+            e.Handled = true;
+        }
+    }
+
+    // Salir del cuadro sin Enter descarta lo escrito
+    void WidthBoxLostFocus(object? sender, FocusChangedEventArgs e) => ShowWidth();
 
     bool _multiClick;
 
@@ -386,9 +431,9 @@ public partial class MainWindow : Window
     protected override async void OnClosing(WindowClosingEventArgs e)
     {
         base.OnClosing(e);
-        if (_closeConfirmed || !Vm.IsDirty) return;
+        if (_closeConfirmed || !Vm.HasUnsaved) return;
         e.Cancel = true;
-        if (await Vm.CanLeaveAsync())
+        if (await Vm.ConfirmCloseAllAsync())
         {
             _closeConfirmed = true;
             Close();
