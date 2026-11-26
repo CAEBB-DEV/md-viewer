@@ -25,13 +25,14 @@ static class SingleInstance
         if (isFirst) return true;
 
         var path = args.Length > 0 ? Path.GetFullPath(args[0]) : ""; // relativa al directorio de quien la lanzó
-        // ponytail: ~5 s de reintentos por si la primera instancia aún está arrancando; si no responde, se abre otra
-        for (var attempt = 0; attempt < 20; attempt++)
+
+        // Reintentos rápidos (~600 ms máximo en lugar de 7 segundos) si la primera instancia está terminando de iniciar
+        for (var attempt = 0; attempt < 4; attempt++)
         {
             try
             {
                 using var client = new NamedPipeClientStream(".", Name, PipeDirection.Out, PipeOptions.CurrentUserOnly);
-                client.Connect(250);
+                client.Connect(100);
                 if (OperatingSystem.IsWindows()) AllowSetForegroundWindow(-1); // deja que la otra ventana pase al frente
                 using var writer = new StreamWriter(client);
                 writer.WriteLine(path);
@@ -39,9 +40,11 @@ static class SingleInstance
             }
             catch (Exception e) when (e is TimeoutException or IOException)
             {
-                Thread.Sleep(100);
+                Thread.Sleep(50);
             }
         }
+
+        // Si la instancia previa no responde (ej. proceso colgado o zombie), arrancamos esta instancia
         return true;
     }
 
@@ -57,11 +60,19 @@ static class SingleInstance
                 server.WaitForConnection();
                 using var reader = new StreamReader(server);
                 var line = reader.ReadLine();
-                onOpen(string.IsNullOrWhiteSpace(line) ? null : line);
+                try
+                {
+                    onOpen(string.IsNullOrWhiteSpace(line) ? null : line);
+                }
+                catch { }
             }
             catch (IOException)
             {
-                // conexión interrumpida: se vuelve a escuchar
+                Thread.Sleep(100);
+            }
+            catch (Exception)
+            {
+                Thread.Sleep(250);
             }
         }
     }) { IsBackground = true, Name = "MdViewer.SingleInstance" }.Start();

@@ -1,7 +1,9 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using AvaloniaEdit.Document;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -36,23 +38,61 @@ public partial class FsNode : ObservableObject
         if (isFolder) Children.Add(new FsNode("", "", false)); // marcador para que aparezca la flecha
     }
 
-    // ponytail: carga síncrona en el hilo de UI; pasar a Task.Run si alguna carpeta enorme se nota lenta
+    // Filtro multiplataforma: carpetas que no contienen archivos markdown de usuario y saturan el árbol
+    static readonly HashSet<string> ExcludedDirs = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".git", ".svn", ".hg", "node_modules", ".vs", ".idea", ".vscode", "bin", "obj",
+        ".cache", ".local", "dist", "build", "$RECYCLE.BIN", "System Volume Information",
+        ".Trash", ".Trashes"
+    };
+
     partial void OnIsExpandedChanged(bool value)
     {
         if (!value || !IsFolder || _loaded) return;
         _loaded = true;
+        _ = LoadChildrenAsync();
+    }
+
+    async Task LoadChildrenAsync()
+    {
+        var path = FullPath;
+
+        // I/O en segundo plano para no congelar el hilo principal de la interfaz
+        var (dirs, files) = await Task.Run(() =>
+        {
+            var dirResults = new List<string>();
+            var fileResults = new List<string>();
+
+            try
+            {
+                foreach (var dir in Directory.EnumerateDirectories(path, "*", Options))
+                {
+                    var name = Path.GetFileName(dir);
+                    if (!ExcludedDirs.Contains(name))
+                        dirResults.Add(dir);
+                }
+                dirResults.Sort(StringComparer.CurrentCultureIgnoreCase);
+
+                foreach (var file in Directory.EnumerateFiles(path, "*.md", Options))
+                {
+                    fileResults.Add(file);
+                }
+                fileResults.Sort(StringComparer.CurrentCultureIgnoreCase);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or OperationCanceledException)
+            {
+                // Carpeta sin permisos, inaccesible o desconectada: se omite limpiamente
+            }
+
+            return (dirResults, fileResults);
+        });
+
+        // La actualización de Children (ObservableCollection) ocurre al regresar al UI Thread
         Children.Clear();
-        try
-        {
-            foreach (var dir in Directory.EnumerateDirectories(FullPath, "*", Options).Order(StringComparer.CurrentCultureIgnoreCase))
-                Children.Add(new FsNode(Path.GetFileName(dir), dir, true));
-            foreach (var file in Directory.EnumerateFiles(FullPath, "*.md", Options).Order(StringComparer.CurrentCultureIgnoreCase))
-                Children.Add(new FsNode(Path.GetFileName(file), file, false));
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // carpeta ilegible: se queda vacía
-        }
+        foreach (var dir in dirs)
+            Children.Add(new FsNode(Path.GetFileName(dir), dir, true));
+        foreach (var file in files)
+            Children.Add(new FsNode(Path.GetFileName(file), file, false));
     }
 
     /// <summary>Agregado por el usuario (primer nivel del explorador): muestra el botón ✕ para cerrarlo.</summary>

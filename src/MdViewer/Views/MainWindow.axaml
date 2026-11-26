@@ -98,8 +98,7 @@
         <Style Selector="TreeView.explorer">
             <Setter Property="ItemTemplate">
                 <TreeDataTemplate x:DataType="vm:FsNode" ItemsSource="{Binding Children}">
-                    <Grid Classes="row" Classes.dirty="{Binding IsDirty}" ColumnDefinitions="Auto,Auto,*,Auto" Background="Transparent"
-                          Tapped="ExplorerRowTapped" DoubleTapped="ExplorerRowDoubleTapped">
+                    <Grid Classes="row" Classes.dirty="{Binding IsDirty}" ColumnDefinitions="Auto,Auto,*,Auto" Background="Transparent">
                         <!-- Con cambios sin guardar: ● a la izquierda del icono (solo en Archivos) -->
                         <TextBlock Classes="dirtyDot" Text="●" />
                         <!-- Icono: el mismo de los .md en el sistema (hoja + logo) para archivos; carpeta para carpetas -->
@@ -297,7 +296,7 @@
                             <Panel Name="FoldersBody">
                                 <TextBlock Text="Agrega carpetas con +" TextWrapping="Wrap" Margin="12,4"
                                            Opacity="0.6" IsVisible="{Binding !Folders.Count}" />
-                                <TreeView Classes="explorer" ItemsSource="{Binding Folders}"
+                                <TreeView Name="FoldersTree" Classes="explorer" ItemsSource="{Binding Folders}"
                                           SelectedItem="{Binding SelectedFolderItem}"
                                           SelectionChanged="ExplorerSelectionChanged">
                                     <TreeView.KeyBindings>

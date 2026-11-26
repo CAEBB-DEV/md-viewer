@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
-  <!-- Icono de los archivos .md: hoja con esquina doblada y el logo de MD Viewer abajo a la derecha -->
+  <!-- Icono de los archivos .md: hoja con esquina doblada y el logo de MD Viewer abajo a la derecha
+       (generado por tools/generar-iconos.py) -->
   <polygon points="36,8 144,8 196,60 196,248 36,248" fill="#FFFFFF" stroke="#8A94A6" stroke-width="6" stroke-linejoin="round" />
   <polygon points="144,8 144,60 196,60" fill="#DDE3EA" stroke="#8A94A6" stroke-width="6" stroke-linejoin="round" />
   <g fill="#B8C1CE">
@@ -9,9 +10,9 @@
     <rect x="64" y="168" width="64" height="12" />
   </g>
   <g transform="translate(126,120) scale(2.125)">
-    <polygon fill="#0D47A1" points="20.4,40.6 8.8,35.1 8.8,0 32,11.5 32,23 20.4,17.3" />
-    <polygon fill="#0D47A1" points="32,64 32,52.4 8.8,39.7 8.8,45.8" />
-    <polygon fill="#1976D2" points="43.6,40.6 55.2,35.1 55.2,0 32,11.5 32,23 43.6,17.3" />
-    <polygon fill="#1976D2" points="32,64 32,52.4 55.2,39.7 55.2,45.8" />
+    <polygon fill="#0D47A1" points="8.80,35.10 8.80,0.00 17.00,4.06 20.40,18.25 23.80,7.44 32.00,11.50 32.00,46.60 24.40,42.83 24.40,19.73 21.30,32.20 19.50,31.30 16.40,15.77 16.40,38.87" />
+    <path fill="#1976D2" fill-rule="evenodd" d="M32.00,11.50 48.70,3.22 55.20,8.00 55.20,27.10 48.70,38.32 32.00,46.60 Z M39.60,15.33 45.08,12.62 47.60,14.47 47.60,28.17 45.08,32.52 39.60,35.23 Z" />
+    <polygon fill="#0D47A1" points="32.00,64.00 32.00,52.40 8.80,39.70 8.80,45.80" />
+    <polygon fill="#1976D2" points="32.00,64.00 32.00,52.40 55.20,39.70 55.20,45.80" />
   </g>
 </svg>

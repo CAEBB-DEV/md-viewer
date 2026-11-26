@@ -203,7 +203,7 @@ md-viewer/
 │   ├── Styles/                 # GithubMarkdown.axaml: estilo GitHub del visor nativo
 │   └── Assets/                 # Icono de la app y logo del autor
 ├── packaging/                  # Instaladores: windows/ (Inno Setup), macos/ (.dmg), linux/ (.deb)
-├── tools/                      # Subida de versión y publicación
+├── tools/                      # Subida de versión, publicación y generar-iconos.py (logo e iconos de todas las plataformas)
 ├── .github/workflows/          # release.yml: genera y publica los 3 instaladores
 ├── docs/                       # Capturas de este README
 └── .vscode/                    # Depuración, extensiones y tareas (build, watch, instaladores)

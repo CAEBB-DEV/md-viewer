@@ -62,7 +62,7 @@ public partial class MainWindow : Window
         Opened += (_, _) => _registryTask ??= Task.Run(() => new RegistryOptions(ThemeName.LightPlus));
         ActualThemeVariantChanged += (_, _) => ApplyEditorTheme();
         ApplyExplorerLayout();
-        LayoutUpdated += (_, _) => UpdateFilesMinHeight(); // al abrir/cerrar archivos y al cambiar el tamaño
+        // LayoutUpdated += (_, _) => UpdateFilesMinHeight(); // se disparaba en cada pasada de layout: ver QueueFilesMinHeight
         ShowWidth();
         // Ctrl+O / Ctrl+N: lo mismo que los botones Abrir y Crear de Archivos (en código: un binding desde
         // Window.KeyBindings no llega a la ventana)
@@ -76,6 +76,11 @@ public partial class MainWindow : Window
             Gesture = new KeyGesture(Key.N, KeyModifiers.Control),
             Command = new RelayCommand(() => CreateFile(null, new RoutedEventArgs())),
         });
+        foreach (var tree in new[] { FilesTree, FoldersTree })
+        {
+            tree.AddHandler(TappedEvent, ExplorerTapped);
+            tree.AddHandler(DoubleTappedEvent, ExplorerDoubleTapped, handledEventsToo: true); // aunque el TreeViewItem lo marque
+        }
         Viewer.AddHandler(KeyDownEvent, CopyViewerSelection, RoutingStrategies.Tunnel);
         Viewer.AddHandler(PointerPressedEvent, SelectWordOrParagraph, RoutingStrategies.Tunnel);
         Viewer.AddHandler(PointerReleasedEvent, KeepMultiClickSelection, RoutingStrategies.Tunnel);
@@ -278,7 +283,12 @@ public partial class MainWindow : Window
         rows[2].MinHeight = foldersOpen ? PanelMinHeight : 0;
         ExplorerSplitter.IsVisible = foldersOpen;
         FoldersToggle.Classes.Set("collapsed", !foldersOpen);
+        QueueFilesMinHeight();
     }
+
+    // Recalcula el alto mínimo de Archivos después del layout (al abrir/cerrar archivos, cambiar el tamaño de la
+    // ventana o plegar Carpetas), en lugar de en cada LayoutUpdated
+    void QueueFilesMinHeight() => Dispatcher.UIThread.Post(UpdateFilesMinHeight, DispatcherPriority.Background);
 
     // Archivos nunca tapa un archivo abierto: su alto mínimo es el que necesita para mostrarlos todos (crece al abrir
     // más y el separador no lo deja bajar de ahí). Tope: Carpetas conserva su mínimo; si no caben, Archivos se desplaza.
@@ -297,20 +307,34 @@ public partial class MainWindow : Window
         if (Math.Abs(row.MinHeight - min) > 0.5) row.MinHeight = min;
     }
 
-    // Clic en cualquier parte de la fila de una carpeta: la despliega o la pliega (no hace falta atinar a la flecha)
-    void ExplorerRowTapped(object? sender, TappedEventArgs e)
+    // Clic en cualquier parte de la fila de una carpeta (también la sangría y los márgenes, que son del TreeViewItem
+    // y no del contenido de la fila): la despliega o la pliega. Se escucha en el árbol para cubrir toda la fila.
+    FsNode? _lastTappedFolder;
+    bool _lastTappedExpanded;
+
+    // Nodo de la fila donde ocurrió el evento; null sobre un botón (la flecha ▸ y el ✕ hacen lo suyo)
+    static FsNode? ExplorerNodeAt(RoutedEventArgs e) =>
+        e.Source is Visual source && source.FindAncestorOfType<Button>(includeSelf: true) is null
+            ? source.FindAncestorOfType<TreeViewItem>(includeSelf: true)?.DataContext as FsNode
+            : null;
+
+    void ExplorerTapped(object? sender, TappedEventArgs e)
     {
-        if (sender is Control { DataContext: FsNode { IsFolder: true } folder }) folder.IsExpanded = !folder.IsExpanded;
+        if (ExplorerNodeAt(e) is not { IsFolder: true } folder) return;
+        folder.IsExpanded = !folder.IsExpanded;
+        _lastTappedFolder = folder;
+        _lastTappedExpanded = folder.IsExpanded;
     }
 
-    // Doble clic en un archivo de Carpetas: deja de ser vista previa y pasa a Archivos.
-    // En una carpeta, el primer clic ya la desplegó; se marca como atendido para que el TreeViewItem no la vuelva
-    // a plegar (él también alterna con doble clic) y dos clics rápidos no la dejen como estaba.
-    void ExplorerRowDoubleTapped(object? sender, TappedEventArgs e)
+    // Doble clic en un archivo: deja de ser vista previa y pasa a Archivos.
+    // En una carpeta, el primer clic ya la desplegó (o plegó) y el TreeViewItem la vuelve a alternar con el doble
+    // clic: se deja como quedó tras el primer clic, para que dos clics rápidos no la dejen como estaba.
+    void ExplorerDoubleTapped(object? sender, TappedEventArgs e)
     {
-        if (sender is not Control { DataContext: FsNode node }) return;
-        if (node.IsFolder) e.Handled = true;
-        else Vm.KeepOpen(node);
+        if (ExplorerNodeAt(e) is not { } node) return;
+        if (!node.IsFolder) Vm.KeepOpen(node);
+        else if (node == _lastTappedFolder) node.IsExpanded = _lastTappedExpanded;
+        e.Handled = true;
     }
 
     // En pantallas angostas el explorador se superpone y se cierra al abrir un archivo
@@ -323,6 +347,7 @@ public partial class MainWindow : Window
     protected override void OnSizeChanged(SizeChangedEventArgs e)
     {
         base.OnSizeChanged(e);
+        QueueFilesMinHeight(); // antes del return: el tope de Archivos depende del alto de la ventana
         var narrow = e.NewSize.Width < NarrowWidth;
         if (narrow == _narrow) return;
         _narrow = narrow;
@@ -374,30 +399,80 @@ public partial class MainWindow : Window
         _multiClick = false;
         if (e.ClickCount < 2 || !e.GetCurrentPoint(Viewer).Properties.IsLeftButtonPressed) return;
 
-        // Los bloques de texto no reciben el puntero (la librería lo maneja a nivel de documento),
-        // así que se busca el bloque cuyos límites contienen el clic.
-        var blocks = Viewer.GetVisualDescendants().OfType<CTextBlock>().ToList();
-        var block = blocks.FirstOrDefault(b => !b.Classes.Contains("ListMarker") && new Rect(b.Bounds.Size).Contains(e.GetPosition(b)));
-        if (block is null) return;
-
-        foreach (var other in blocks) other.ClearSelection();
-        var text = block.Text;
-        if (e.ClickCount >= 3)
-            block.Select(0, text.Length);
-        else
+        try
         {
-            // Índice del carácter bajo el puntero: se selecciona de ahí al final y se lee el inicio
-            var point = e.GetPosition(block);
-            block.Select(block.CalcuatePointerFrom(point.X, point.Y), block.GetEnd());
-            var index = Math.Clamp(block.Selection?.From ?? 0, 0, text.Length);
-            int start = index, end = index;
-            while (start > 0 && IsWordChar(text[start - 1])) start--;
-            while (end < text.Length && IsWordChar(text[end])) end++;
-            if (end > start) block.Select(start, end);
-            else block.ClearSelection();
+            // Los bloques de texto no reciben el puntero (la librería lo maneja a nivel de documento),
+            // así que se busca el bloque cuyos límites contienen el clic.
+            var blocks = Viewer.GetVisualDescendants().OfType<CTextBlock>().ToList();
+            var block = blocks.FirstOrDefault(b => !b.Classes.Contains("ListMarker") && new Rect(b.Bounds.Size).Contains(e.GetPosition(b)));
+            if (block is null) return;
+
+            foreach (var other in blocks) other.ClearSelection();
+            var text = block.Text;
+            if (string.IsNullOrEmpty(text)) return;
+
+            if (e.ClickCount >= 3)
+            {
+                // Triple clic: selecciona el párrafo completo.
+                // Si el bloque contiene decoradores al final (enlaces, negrita, código), ColorTextBlock
+                // puede fallar en text.Length exacto; capturamos y ajustamos al límite seguro.
+                try
+                {
+                    block.Select(0, text.Length);
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    if (text.Length > 1)
+                        block.Select(0, text.Length - 1);
+                }
+            }
+            else
+            {
+                // Doble clic: selecciona la palabra bajo el cursor.
+                var point = e.GetPosition(block);
+                try
+                {
+                    block.Select(block.CalcuatePointerFrom(point.X, point.Y), block.GetEnd());
+                }
+                catch (Exception)
+                {
+                    return; // Si el cálculo del glifo inicial falla sobre un elemento gráfico, salimos seguros
+                }
+
+                var index = Math.Clamp(block.Selection?.From ?? 0, 0, text.Length);
+                int start = index, end = index;
+                while (start > 0 && IsWordChar(text[start - 1])) start--;
+                while (end < text.Length && IsWordChar(text[end])) end++;
+
+                if (end > start)
+                {
+                    try
+                    {
+                        block.Select(start, end);
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        // Fallback seguro si 'end' coincide con el límite exacto del decorador
+                        if (end - 1 > start)
+                            block.Select(start, end - 1);
+                        else
+                            block.ClearSelection();
+                    }
+                }
+                else
+                {
+                    block.ClearSelection();
+                }
+            }
+
+            _multiClick = true;
+            e.Handled = true;
         }
-        _multiClick = true;
-        e.Handled = true;
+        catch (Exception)
+        {
+            // Salvaguarda global: garantiza que ningún fallo visual tumbe la aplicación
+            _multiClick = false;
+        }
     }
 
     // Evita que la librería, al soltar el botón, reemplace la selección del doble/triple clic
@@ -444,6 +519,8 @@ public partial class MainWindow : Window
         base.OnDataContextChanged(e);
         if (DataContext is not MainViewModel vm) return;
         vm.ConfirmUnsaved = AskUnsavedAsync;
+        vm.Files.CollectionChanged += (_, _) => QueueFilesMinHeight();
+        QueueFilesMinHeight(); // los archivos que se recuerdan de la sesión anterior ya están cargados
         vm.AskSavePath = AskSavePathAsync;
         vm.PropertyChanged += (_, p) =>
         {
