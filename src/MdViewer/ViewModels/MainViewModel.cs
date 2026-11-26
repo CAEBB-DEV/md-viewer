@@ -79,8 +79,12 @@ public partial class MainViewModel : ObservableObject
     /// <summary>El documento mostrado tiene cambios sin guardar.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Title))]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     public partial bool IsDirty { get; set; }
+
+    /// <summary>Guardar: hay cambios, o es un documento nuevo (aunque esté vacío) que aún no tiene archivo.</summary>
+    public bool CanSave => IsDirty || _active?.IsUntitled == true;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Title))]
@@ -89,7 +93,7 @@ public partial class MainViewModel : ObservableObject
     public partial string? FileName { get; set; }
 
     /// <summary>Carpeta del archivo abierto: base para las imágenes con ruta relativa (logo.png, docs/captura.png).</summary>
-    public string? DocumentFolder => _active is null ? null : Path.GetDirectoryName(_active.FullPath);
+    public string? DocumentFolder => _active is null || _active.IsUntitled ? null : Path.GetDirectoryName(_active.FullPath);
 
     [ObservableProperty]
     public partial string? Error { get; set; }
@@ -144,6 +148,21 @@ public partial class MainViewModel : ObservableObject
         OpenFiles([path]);
     }
 
+    /// <summary>
+    /// Crear: documento nuevo "Sin título-N.md" en "Archivos", abierto en modo edición. No toca el disco: la
+    /// ubicación y el nombre se piden al guardarlo (<see cref="AskSavePath"/>).
+    /// </summary>
+    public void NewDocument()
+    {
+        var number = 1;
+        while (Files.Any(f => f.IsUntitled && f.Name == $"Sin título-{number}.md")) number++;
+        var node = FsNode.Untitled($"Sin título-{number}.md");
+        node.Document!.TextChanged += (_, _) => MarkDirty(node);
+        Files.Add(node); // no va a explorador.txt hasta que se guarde (ver SaveList)
+        Activate(node);
+        IsEditing = true;
+    }
+
     /// <summary>Agrega los archivos a "Archivos" y muestra el último.</summary>
     public void OpenFiles(IEnumerable<string> paths)
     {
@@ -168,7 +187,9 @@ public partial class MainViewModel : ObservableObject
 
     bool IsPreview(string path) => _active is not null && !Files.Contains(_active) && SamePath(_active.FullPath, path);
 
-    static bool SamePath(string a, string b) => string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), PathComparison);
+    // Un documento sin título (ruta vacía) no coincide con ninguna ruta
+    static bool SamePath(string a, string b) =>
+        a.Length > 0 && b.Length > 0 && string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), PathComparison);
 
     // Pasa a la lista de "Archivos" (si no estaba)
     void Keep(FsNode node)
@@ -196,6 +217,8 @@ public partial class MainViewModel : ObservableObject
             IsEditing = node.IsEditing;
             Error = null;
             OnPropertyChanged(nameof(DocumentFolder));
+            OnPropertyChanged(nameof(CanSave));
+            SaveCommand.NotifyCanExecuteChanged();
         }
         SyncSelection();
         return true;
@@ -204,7 +227,7 @@ public partial class MainViewModel : ObservableObject
     // Lee el archivo del disco, salvo que tenga cambios sin guardar (así se ve lo último si cambió por fuera)
     bool Load(FsNode node)
     {
-        if (node.Document is not null && node.IsDirty) return true;
+        if (node.Document is not null && (node.IsDirty || node.IsUntitled)) return true;
         string text;
         try { text = File.ReadAllText(node.FullPath); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -306,6 +329,8 @@ public partial class MainViewModel : ObservableObject
         IsDirty = false;
         Markdown = "";
         OnPropertyChanged(nameof(DocumentFolder));
+        OnPropertyChanged(nameof(CanSave));
+        SaveCommand.NotifyCanExecuteChanged();
     }
 
     void SaveList()
@@ -313,7 +338,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(ListPath)!);
-            File.WriteAllLines(ListPath, Files.Concat(Folders).Select(r => r.FullPath));
+            File.WriteAllLines(ListPath, Files.Concat(Folders).Where(r => !r.IsUntitled).Select(r => r.FullPath));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -355,7 +380,7 @@ public partial class MainViewModel : ObservableObject
         if (!node.IsDirty || ConfirmUnsaved is null) return true;
         return await ConfirmUnsaved(node.Name) switch
         {
-            UnsavedChoice.Save => TrySave(node),
+            UnsavedChoice.Save => await SaveAsync(node),
             UnsavedChoice.Discard => true,
             _ => false,
         };
@@ -384,10 +409,62 @@ public partial class MainViewModel : ObservableObject
         else Markdown = Document.Text;
     }
 
-    [RelayCommand(CanExecute = nameof(IsDirty))]
-    void Save()
+    [RelayCommand(CanExecute = nameof(CanSave))]
+    async Task Save()
     {
-        if (_active is not null) TrySave(_active);
+        if (_active is not null) await SaveAsync(_active);
+    }
+
+    /// <summary>La vista pide dónde guardar un documento nuevo (recibe el nombre sugerido; null si se canceló).</summary>
+    public Func<string, Task<string?>>? AskSavePath { get; set; }
+
+    // Un documento nuevo pide ubicación y nombre (siempre .md) y pasa a ser ese archivo; los demás se guardan directo
+    async Task<bool> SaveAsync(FsNode node)
+    {
+        if (!node.IsUntitled) return TrySave(node);
+        if (AskSavePath is null || await AskSavePath(node.Name) is not { } chosen) return false;
+        var path = Path.GetFullPath(chosen);
+        if (!path.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+        {
+            path += ".md";
+            // El diálogo confirmó reemplazar el nombre sin extensión, no este
+            if (File.Exists(path))
+            {
+                Error = "Ya existe un archivo con ese nombre: " + path;
+                return false;
+            }
+        }
+        try { File.WriteAllText(path, node.Document!.Text); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Error = "No se pudo guardar: " + e.Message;
+            return false;
+        }
+        // Si ese archivo ya estaba abierto, se reemplaza por este (se acaba de sobrescribir)
+        var replacedActive = false;
+        if (FindOpen(path) is { } previous)
+        {
+            replacedActive = previous == _active;
+            Files.Remove(previous);
+        }
+        node.AssignPath(path);
+        node.IsDirty = false;
+        SaveList();
+        Error = null;
+        if (replacedActive)
+        {
+            _active = null;
+            Activate(node);
+        }
+        else if (node == _active)
+        {
+            FileName = node.Name;
+            IsDirty = false;
+            OnPropertyChanged(nameof(DocumentFolder));
+            OnPropertyChanged(nameof(CanSave));
+            SaveCommand.NotifyCanExecuteChanged();
+        }
+        return true;
     }
 
     /// <summary>Guarda si hay cambios (solo por acción del usuario). Devuelve false si falló la escritura.</summary>

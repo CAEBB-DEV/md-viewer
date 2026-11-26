@@ -79,6 +79,8 @@
 
 | Acción | Atajo |
 |---|---|
+| Abrir archivos | `Ctrl+O` |
+| Crear un archivo nuevo | `Ctrl+N` |
 | Guardar | `Ctrl+S` |
 | Copiar la selección del visor | `Ctrl+C` |
 | Seleccionar palabra / párrafo | Doble clic / triple clic |

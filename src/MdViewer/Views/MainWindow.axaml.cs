@@ -4,6 +4,7 @@ using System.IO;
 using IOPath = System.IO.Path;
 using System.Linq;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -49,6 +50,8 @@ public partial class MainWindow : Window
         var icon = new Avalonia.Controls.Shapes.Path { Data = CopyIcon, Width = 16, Height = 16, StrokeThickness = 1.4, StrokeLineCap = PenLineCap.Round };
         icon.Bind(Shape.StrokeProperty, button.GetObservable(ForegroundProperty));
         button.Content = icon;
+        // Valor local: los estilos de la librería ganan al de App.axaml (mano en todos los botones)
+        button.Cursor = new Cursor(StandardCursorType.Hand);
         ToolTip.SetTip(button, "Copiar");
     });
 
@@ -61,6 +64,18 @@ public partial class MainWindow : Window
         ApplyExplorerLayout();
         LayoutUpdated += (_, _) => UpdateFilesMinHeight(); // al abrir/cerrar archivos y al cambiar el tamaño
         ShowWidth();
+        // Ctrl+O / Ctrl+N: lo mismo que los botones Abrir y Crear de Archivos (en código: un binding desde
+        // Window.KeyBindings no llega a la ventana)
+        KeyBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.O, KeyModifiers.Control),
+            Command = new RelayCommand(() => AddFile(null, new RoutedEventArgs())),
+        });
+        KeyBindings.Add(new KeyBinding // Ctrl+N: crear archivo nuevo
+        {
+            Gesture = new KeyGesture(Key.N, KeyModifiers.Control),
+            Command = new RelayCommand(() => CreateFile(null, new RoutedEventArgs())),
+        });
         Viewer.AddHandler(KeyDownEvent, CopyViewerSelection, RoutingStrategies.Tunnel);
         Viewer.AddHandler(PointerPressedEvent, SelectWordOrParagraph, RoutingStrategies.Tunnel);
         Viewer.AddHandler(PointerReleasedEvent, KeepMultiClickSelection, RoutingStrategies.Tunnel);
@@ -195,6 +210,27 @@ public partial class MainWindow : Window
         var folders = await StorageProvider.OpenFolderPickerAsync(
             new FolderPickerOpenOptions { Title = "Agregar carpetas", AllowMultiple = true });
         Vm.AddFolders(folders.Select(f => f.TryGetLocalPath()).OfType<string>());
+    }
+
+    // Crear: documento nuevo sin título, directo en el editor (la ubicación se pide al guardarlo)
+    void CreateFile(object? sender, RoutedEventArgs e)
+    {
+        Vm.NewDocument();
+        Dispatcher.UIThread.Post(() => Editor.Focus(), DispatcherPriority.Loaded);
+    }
+
+    // Guardar un documento nuevo: el diálogo de guardar elige carpeta y nombre (.md)
+    async Task<string?> AskSavePathAsync(string suggestedName)
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Guardar archivo Markdown",
+            SuggestedFileName = suggestedName,
+            DefaultExtension = "md",
+            FileTypeChoices = [new FilePickerFileType("Markdown") { Patterns = ["*.md"] }],
+            ShowOverwritePrompt = true,
+        });
+        return file?.TryGetLocalPath();
     }
 
     async void AddFile(object? sender, RoutedEventArgs e)
@@ -408,6 +444,7 @@ public partial class MainWindow : Window
         base.OnDataContextChanged(e);
         if (DataContext is not MainViewModel vm) return;
         vm.ConfirmUnsaved = AskUnsavedAsync;
+        vm.AskSavePath = AskSavePathAsync;
         vm.PropertyChanged += (_, p) =>
         {
             if (p.PropertyName is nameof(MainViewModel.ShowWebViewer) or nameof(MainViewModel.Markdown)) UpdateWebViewer();

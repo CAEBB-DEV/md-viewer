@@ -165,6 +165,31 @@
         <Style Selector="Grid.row.dirty TextBlock.name">
             <Setter Property="Foreground" Value="{DynamicResource ModifiedBrush}" />
         </Style>
+        <!-- Mensaje central sin documento: texto atenuado y atajos como teclas (recuadro con borde inferior más grueso) -->
+        <Style Selector="WrapPanel.shortcutHint > TextBlock">
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Opacity" Value="0.65" />
+            <Setter Property="Margin" Value="4,3" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="WrapPanel.shortcutHint > TextBlock.plus">
+            <Setter Property="Margin" Value="3,3" />
+        </Style>
+        <Style Selector="WrapPanel.shortcutHint > TextBlock.comma">
+            <Setter Property="Margin" Value="0,3,2,3" />
+        </Style>
+        <Style Selector="Border.key">
+            <Setter Property="Background" Value="{DynamicResource KeyCapBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" />
+            <Setter Property="BorderThickness" Value="1,1,1,2" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="6,1" />
+            <Setter Property="Margin" Value="0,3" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Border.key > TextBlock">
+            <Setter Property="FontSize" Value="12" />
+        </Style>
         <!-- Botón "Abrir" del encabezado de Archivos: icono de carpeta abierta -->
         <Style Selector="Grid.sectionHeader Button.iconButton">
             <Setter Property="Padding" Value="6,4" />
@@ -231,16 +256,21 @@
                 <Grid Name="ExplorerGrid" RowDefinitions="*,6,*" Margin="6,6,0,6">
                     <Border Classes="panel">
                         <DockPanel>
-                            <Grid Name="FilesHeader" Classes="sectionHeader" DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Cursor="Arrow">
+                            <Grid Name="FilesHeader" Classes="sectionHeader" DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" Cursor="Arrow">
                                 <TextBlock Text="Archivos" FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0,0,0" />
-                                <Button Grid.Column="1" Classes="iconButton" Click="AddFile" AutomationProperties.Name="Abrir archivos"
-                                        ToolTip.Tip="Abrir archivos">
+                                <Button Grid.Column="1" Classes="iconButton" Click="CreateFile" AutomationProperties.Name="Crear archivo"
+                                        ToolTip.Tip="Crear archivo (Ctrl+N)">
+                                    <!-- Hoja con +: archivo nuevo -->
+                                    <Path Data="M9,1.5 H3.5 A1,1 0 0 0 2.5,2.5 V13.5 A1,1 0 0 0 3.5,14.5 H8 M9,1.5 L12.5,5 V8 M9,1.5 V5 H12.5 M12,10 V15 M9.5,12.5 H14.5" />
+                                </Button>
+                                <Button Grid.Column="2" Classes="iconButton" Click="AddFile" AutomationProperties.Name="Abrir archivos"
+                                        ToolTip.Tip="Abrir archivos (Ctrl+O)">
                                     <!-- Carpeta abierta -->
                                     <Path Data="M1.5,12.5 V3.5 A1,1 0 0 1 2.5,2.5 H6 L7.5,4.5 H12.5 A1,1 0 0 1 13.5,5.5 V7 M1.5,12.5 L3.5,7.5 A1,1 0 0 1 4.4,7 H14.2 A0.6,0.6 0 0 1 14.8,7.8 L13,12.1 A0.8,0.8 0 0 1 12.3,12.5 Z" />
                                 </Button>
                             </Grid>
                             <Panel Name="FilesBody">
-                                <TextBlock Name="FilesHint" Text="Aquí aparecen los archivos abiertos. Abre archivos con el botón de la carpeta o con doble clic en Carpetas."
+                                <TextBlock Name="FilesHint" Text="Aquí aparecen los archivos abiertos. Crea o abre archivos con los botones de arriba, o con doble clic en Carpetas."
                                            TextWrapping="Wrap" Margin="12,4" Opacity="0.6" IsVisible="{Binding !Files.Count}" />
                                 <TreeView Name="FilesTree" Classes="explorer files" ItemsSource="{Binding Files}"
                                           SelectedItem="{Binding SelectedFile}"
@@ -330,6 +360,20 @@
                             IsVisible="{Binding FileName, Converter={x:Static ObjectConverters.IsNull}}">
                     <Image Source="/Assets/app.ico" Width="160" Height="160" RenderOptions.BitmapInterpolationMode="HighQuality" />
                     <TextBlock Text="MD Viewer" FontSize="32" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                    <!-- Mensaje con los atajos dibujados como teclas (estilo WrapPanel.shortcutHint / Border.key) -->
+                    <WrapPanel Classes="shortcutHint" HorizontalAlignment="Center">
+                        <TextBlock Text="Crea" />
+                        <Border Classes="key"><TextBlock Text="Ctrl" /></Border>
+                        <TextBlock Classes="plus" Text="+" />
+                        <Border Classes="key"><TextBlock Text="N" /></Border>
+                        <TextBlock Classes="comma" Text="," />
+                        <TextBlock Text="Abre" />
+                        <Border Classes="key"><TextBlock Text="Ctrl" /></Border>
+                        <TextBlock Classes="plus" Text="+" />
+                        <Border Classes="key"><TextBlock Text="O" /></Border>
+                        <TextBlock Classes="comma" Text="," />
+                        <TextBlock Text="o Selecciona un Archivo para Iniciar a trabajar con Archivos MarkDown" TextWrapping="Wrap" />
+                    </WrapPanel>
                 </StackPanel>
 
                 <md:MarkdownScrollViewer Name="Viewer" Markdown="{Binding NativeMarkdown}" AssetPathRoot="{Binding DocumentFolder}" SelectionEnabled="True"

@@ -19,8 +19,9 @@ public partial class FsNode : ObservableObject
 
     bool _loaded;
 
-    public string Name { get; }
-    public string FullPath { get; }
+    public string Name { get; private set; }
+    /// <summary>Ruta en disco; vacía en un documento nuevo que aún no se guardó ("Sin título").</summary>
+    public string FullPath { get; private set; }
     public bool IsFolder { get; }
     public ObservableCollection<FsNode> Children { get; } = [];
 
@@ -68,6 +69,22 @@ public partial class FsNode : ObservableObject
 
     /// <summary>Estaba en modo edición la última vez que se mostró.</summary>
     public bool IsEditing { get; set; }
+
+    /// <summary>Documento nuevo que todavía no tiene archivo en disco (se pide la ubicación al guardarlo).</summary>
+    public bool IsUntitled => FullPath.Length == 0;
+
+    /// <summary>Documento nuevo sin archivo: se muestra con este nombre hasta que se guarda.</summary>
+    public static FsNode Untitled(string name) => new(name, "", false) { IsRoot = true, Document = new TextDocument() };
+
+    /// <summary>Al guardar un documento nuevo: pasa a ser ese archivo.</summary>
+    public void AssignPath(string path)
+    {
+        FullPath = path;
+        Name = Path.GetFileName(path);
+        OnPropertyChanged(nameof(FullPath));
+        OnPropertyChanged(nameof(Name));
+        OnPropertyChanged(nameof(IsUntitled));
+    }
 
     /// <summary>Nodo raíz para una ruta agregada por el usuario (carpeta o archivo).</summary>
     public static FsNode FromPath(string path)
