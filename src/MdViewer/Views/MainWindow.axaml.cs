@@ -28,7 +28,9 @@ public partial class MainWindow : Window
 {
     const double NarrowWidth = 760;
 
-    // Resaltado del editor: se prepara después de mostrar la ventana (cargar gramáticas retrasa el arranque)
+    // Resaltado del editor: las gramáticas se cargan en segundo plano al mostrar la ventana y se instalan en el
+    // editor la primera vez que se edita (hacerlo en el hilo de la interfaz retrasaba el arranque)
+    Task<RegistryOptions>? _registryTask;
     RegistryOptions? _registry;
     TextMate.Installation? _textMate;
     bool? _narrow;
@@ -54,14 +56,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // Resaltado de sintaxis Markdown en el editor, con colores según el tema (cuando la ventana ya se ve)
-        Opened += (_, _) => Dispatcher.UIThread.Post(() =>
-        {
-            _registry = new RegistryOptions(ThemeName.LightPlus);
-            _textMate = Editor.InstallTextMate(_registry);
-            _textMate.SetGrammar(_registry.GetScopeByLanguageId("markdown"));
-            ApplyEditorTheme();
-        }, DispatcherPriority.Background);
+        Opened += (_, _) => _registryTask ??= Task.Run(() => new RegistryOptions(ThemeName.LightPlus));
         ActualThemeVariantChanged += (_, _) => ApplyEditorTheme();
         ApplyExplorerLayout();
         Viewer.AddHandler(KeyDownEvent, CopyViewerSelection, RoutingStrategies.Tunnel);
@@ -83,36 +78,49 @@ public partial class MainWindow : Window
 
     bool IsDark => ActualThemeVariant == ThemeVariant.Dark;
 
+    // Se crea con el primer documento con HTML: iniciar el navegador del sistema es lo más lento del arranque
+    // (en Linux carga GTK y WebKitGTK y lanza sus procesos), y la mayoría de los documentos no lo necesitan.
+    NativeWebView? _webViewer;
+    NativeWebView WebViewer => _webViewer ??= CreateWebViewer();
+
     void SetupWebViewer()
     {
-        // Datos del navegador en la carpeta del usuario (Program Files no permite escribir)
-        WebViewer.EnvironmentRequested += (_, e) =>
-        {
-            e.EnableDevTools = false;
-            if (e is WindowsWebView2EnvironmentRequestedEventArgs windows)
-                windows.UserDataFolder = IOPath.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MdViewer", "WebView2");
-        };
-        WebViewer.NavigationStarted += (_, e) =>
-        {
-            if (_webExpectNavigation) { _webExpectNavigation = false; return; }
-            e.Cancel = true;
-            if (e.Request is { } uri) OpenLink(uri);
-        };
-        WebViewer.NewWindowRequested += (_, e) =>
-        {
-            e.Handled = true;
-            if (e.Request is { } uri) OpenLink(uri);
-        };
         Split.PropertyChanged += (_, e) =>
         {
             if (e.Property == SplitView.IsPaneOpenProperty || e.Property == SplitView.DisplayModeProperty) UpdateWebViewer();
         };
         ActualThemeVariantChanged += (_, _) =>
         {
-            if (WebViewer.IsVisible) _ = WebViewer.InvokeScript($"setTheme({(IsDark ? "true" : "false")})");
+            if (_webViewer?.IsVisible == true) _ = _webViewer.InvokeScript($"setTheme({(IsDark ? "true" : "false")})");
             else _webRendered = null; // se vuelve a generar con el tema nuevo la próxima vez que se muestre
         };
+    }
+
+    NativeWebView CreateWebViewer()
+    {
+        var web = new NativeWebView { IsVisible = false };
+        web.Bind(NativeWebView.BackgroundProperty, this.GetObservable(BackgroundProperty));
+        // Datos del navegador en la carpeta del usuario (Program Files no permite escribir)
+        web.EnvironmentRequested += (_, e) =>
+        {
+            e.EnableDevTools = false;
+            if (e is WindowsWebView2EnvironmentRequestedEventArgs windows)
+                windows.UserDataFolder = IOPath.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MdViewer", "WebView2");
+        };
+        web.NavigationStarted += (_, e) =>
+        {
+            if (_webExpectNavigation) { _webExpectNavigation = false; return; }
+            e.Cancel = true;
+            if (e.Request is { } uri) OpenLink(uri);
+        };
+        web.NewWindowRequested += (_, e) =>
+        {
+            e.Handled = true;
+            if (e.Request is { } uri) OpenLink(uri);
+        };
+        WebHost.Children.Add(web);
+        return web;
     }
 
     // Muestra el visor web cuando el documento tiene HTML y lo carga si cambió. Es una ventana nativa del sistema
@@ -136,7 +144,7 @@ public partial class MainWindow : Window
                 show = false;
             }
         }
-        WebViewer.IsVisible = show;
+        if (_webViewer is not null) _webViewer.IsVisible = show;
     }
 
     // Enlaces del visor web: anclas en la misma página, otros .md en la app, el resto en la app del sistema
@@ -272,7 +280,7 @@ public partial class MainWindow : Window
     void ViewerWidthChanged(object? sender, RangeBaseValueChangedEventArgs e)
     {
         ApplyViewerWidth();
-        if (WebViewer?.IsVisible == true) _ = WebViewer.InvokeScript($"setWidth({Math.Round(e.NewValue / 2) * 2})");
+        if (_webViewer?.IsVisible == true) _ = _webViewer.InvokeScript($"setWidth({Math.Round(e.NewValue / 2) * 2})");
         else _webRendered = null; // se vuelve a generar con el ancho nuevo la próxima vez que se muestre
     }
 
@@ -358,7 +366,20 @@ public partial class MainWindow : Window
         vm.PropertyChanged += (_, p) =>
         {
             if (p.PropertyName is nameof(MainViewModel.ShowWebViewer) or nameof(MainViewModel.Markdown)) UpdateWebViewer();
+            if (p.PropertyName == nameof(MainViewModel.IsEditing) && vm.IsEditing) InstallEditorHighlighting();
         };
+    }
+
+    // Resaltado de sintaxis Markdown en el editor, con colores según el tema
+    async void InstallEditorHighlighting()
+    {
+        if (_textMate is not null) return;
+        var registry = await (_registryTask ??= Task.Run(() => new RegistryOptions(ThemeName.LightPlus)));
+        if (_textMate is not null) return; // se instaló mientras se esperaba
+        _registry = registry;
+        _textMate = Editor.InstallTextMate(registry);
+        _textMate.SetGrammar(registry.GetScopeByLanguageId("markdown"));
+        ApplyEditorTheme();
     }
 
     // Al cerrar con cambios pendientes, pregunta; nunca guarda por su cuenta

@@ -295,8 +295,9 @@
                     </md:MarkdownScrollViewer.MarkdownStyle>
                 </md:MarkdownScrollViewer>
 
-                <!-- Visor web: documentos con HTML (como en GitHub). Su visibilidad la controla UpdateWebViewer -->
-                <NativeWebView Name="WebViewer" IsVisible="False" Background="{Binding $parent[Window].Background}" />
+                <!-- Visor web: documentos con HTML (como en GitHub). El NativeWebView se crea aquí con el primer
+                     documento que lo necesita (MainWindow.WebViewer); su visibilidad la controla UpdateWebViewer -->
+                <Panel Name="WebHost" />
 
                 <ae:TextEditor Name="Editor" Document="{Binding Document}" Padding="8,8,0,0"
                                ShowLineNumbers="True" WordWrap="True" FontSize="14"
